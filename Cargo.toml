@@ -5,3 +5,4 @@ authors = ["Junichiro Kasuya <junichiro.kasuya@gmail.com>"]
 
 [dependencies]
 sdl2 = "0.30"
+bytes = "0.4"
