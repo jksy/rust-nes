@@ -40,6 +40,9 @@ fn main() {
     let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
     rom.print();
 
+    let mut cpu = Cpu::new();
+    cpu.disasm(rom);
+
 }
 
 

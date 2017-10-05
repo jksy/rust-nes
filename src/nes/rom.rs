@@ -2,6 +2,7 @@ extern crate bytes;
 
 use std;
 use std::fs::File;
+use std::io::SeekFrom;
 use std::io::prelude::*;
 use self::bytes::{BytesMut, Bytes, BufMut, Buf};
 use std::mem;
@@ -15,8 +16,8 @@ struct RomHeader {
     magic_number: [u8; 4],
     prg_page_count: u8,
     chr_page_count: u8,
-    lower_mapper: u8,
-    upper_mapper: u8,
+    flags6: u8,
+    flags7: u8,
     flags: [u8; 2],
     zero: [u8; 6]
 }
@@ -30,9 +31,17 @@ impl RomHeader {
     }
 
     fn mapper(&self) -> u16 {
-        let lower = upper_bits(self.lower_mapper) as u16;
-        let upper = upper_bits(self.upper_mapper) as u16;
+        let lower = upper_bits(self.flags6) as u16;
+        let upper = upper_bits(self.flags7) as u16;
         lower | upper << 4
+    }
+
+    fn is_horizontal(&self) -> bool {
+        (self.flags6 & 0x01) != 0
+    }
+
+    fn has_trainer(&self) -> bool {
+        (self.flags6 & 0x04) != 0
     }
 }
 
@@ -69,8 +78,16 @@ impl Rom {
         println!("prg_page_count:{}", self.header.prg_page_count);
         println!("chr_page_count:{}", self.header.chr_page_count);
         println!("mapper:{}", self.header.mapper());
+        println!("flags6:{}", self.header.flags6);
         println!("PRG Len:{}", self.prg.len());
         println!("CHR Len:{}", self.chr.len());
+    }
+
+    pub fn prg(&self, addr: u16) -> u8 {
+        self.prg[addr as usize]
+    }
+    pub fn prg_len(&self) -> u16 {
+        self.prg.len() as u16
     }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {
@@ -86,17 +103,12 @@ impl Rom {
 
     fn read_file(file: &mut File, bytes: &mut BytesMut, read_kbyte: usize) -> Result<(), std::io::Error> {
         let mut buf = [0 as u8; 1024];
-        for _ in 0..read_kbyte {
+        for x in 0..read_kbyte {
+            println!("read_file:{}", x);
             file.read_exact(&mut buf)?;
             bytes.put_slice(&mut buf);
         }
         Ok(())
     }
-}
-
-
-fn run() {
-    let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
-    rom.print();
 }
 

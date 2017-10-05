@@ -1,3 +1,5 @@
+use nes::rom::Rom;
+
 pub struct Cpu {
     pub a: u8,      // accumulator
     pub x: u8,      // index register(X)
@@ -22,6 +24,18 @@ impl Cpu {
                 _ => {println!("invalid opcode:{}", self.pc); break}
             }
             self.pc += 1
+        }
+    }
+
+    pub fn disasm(&mut self, rom: Rom) {
+        self.pc = 0;
+        while self.pc < rom.prg_len() {
+            let opcode = rom.prg(self.pc);
+            if opcode != 0 {
+                println!("{:x} => opcode:{:x}", self.pc, opcode);
+            }
+            self.pc += 1;
+
         }
     }
 

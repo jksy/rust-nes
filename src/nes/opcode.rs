@@ -1,6 +1,9 @@
 //
 // copy from https://github.com/amaiorano/nes-disasm
 //
+//
+use std::collections::HashMap;
+
 enum AddressMode {
     Immedt,    // Immediate : #value
     Implid,    // Implied : no operand
@@ -42,12 +45,12 @@ struct OpCodeEntry {
 }
 
 struct Opcodes {
-
+    table: HashMap<u16, OpCodeEntry>,
 }
 
 impl Opcodes {
     fn new() -> Self {
-        let opcode_table = [
+        let mut opcode_table = [
             OpCodeEntry{opcode: 0x69, optype: OpType::ADC, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
             OpCodeEntry{opcode: 0x65, optype: OpType::ADC, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
             OpCodeEntry{opcode: 0x75, optype: OpType::ADC, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
@@ -256,6 +259,15 @@ impl Opcodes {
             OpCodeEntry{opcode: 0x98, optype: OpType::TYA, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
         ];
 
-        Opcodes{}
+        let mut table = HashMap::new();
+        for entry in opcode_table.into_iter() {
+            table[&entry.opcode] = entry;
+        }
+
+        Opcodes{table: table}
+    }
+
+    fn entry(&self, opcode: u8) -> OpCodeEntry {
+        self.table[opcode as usize]
     }
 }
