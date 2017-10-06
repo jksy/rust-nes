@@ -3,8 +3,10 @@
 //
 //
 use std::collections::HashMap;
+use std::fmt;
 
-enum AddressMode {
+#[derive(Debug, Copy, Clone)]
+pub enum AddressMode {
     Immedt,    // Immediate : #value
     Implid,    // Implied : no operand
     Accumu,    // Accumulator : no operand
@@ -20,7 +22,8 @@ enum AddressMode {
     IndIdx, // Indirect Indexed with Y : ($addr8) + Y
 }
 
-enum OpType {
+#[derive(Debug, Copy, Clone)]
+pub enum OpType {
     ADC, AND, ASL,
     BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS,
     CLC, CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY,
@@ -35,239 +38,253 @@ enum OpType {
     TAX, TAY, TSX, TXA, TXS, TYA,
 }
 
+// struct OpCodeEntry<'a> {
+//     opcode: &'a u8,
+//     optype: &'a OpType,
+//     bytes:  &'a u8,
+//     cycle:  &'a u8,
+//     address_mode: &'a AddressMode,
+// }
+//
+// impl<'a> OpCodeEntry<'a> {
+//     fn new(opcode: u8,
+//            optype: OpType,
+//            bytes: u8,
+//            cycle: u8,
+//            address_mode: AddressMode) -> Self {
+//         OpCodeEntry{opcode: &opcode,
+//                     optype: &optype,
+//                     bytes: &bytes,
+//                     cycle: &cycle,
+//                     address_mode: &address_mode}
+//     }
+// }
 
-struct OpCodeEntry {
-    opcode: u8,
-    optype: OpType,
-    bytes: u8,
-    cycle: u8,
-    address_mode: AddressMode,
-}
+// let opcode_table  = [
+//     [0x69, OpType::ADC, 2, 2, AddressMode::Immedt],
+//     [0x65, OpType::ADC, 2, 3, AddressMode::ZeroPg],
+//     [0x75, OpType::ADC, 2, 4, AddressMode::ZPIdxX],
+//     [0x6D, OpType::ADC, 3, 4, AddressMode::Absolu],
+//     [0x7D, OpType::ADC, 3, 4, AddressMode::AbIdxX],
+//     [0x79, OpType::ADC, 3, 4, AddressMode::AbIdxY],
+//     [0x61, OpType::ADC, 2, 6, AddressMode::IdxInd],
+//     [0x71, OpType::ADC, 2, 5, AddressMode::IndIdx],
+//
+//     [0x29, OpType::AND, 2, 2, AddressMode::Immedt],
+//     [0x25, OpType::AND, 2, 3, AddressMode::ZeroPg],
+//     [0x35, OpType::AND, 2, 4, AddressMode::ZPIdxX],
+//     [0x2D, OpType::AND, 3, 4, AddressMode::Absolu],
+//     [0x3D, OpType::AND, 3, 4, AddressMode::AbIdxX],
+//     [0x39, OpType::AND, 3, 4, AddressMode::AbIdxY],
+//     [0x21, OpType::AND, 2, 6, AddressMode::IdxInd],
+//     [0x31, OpType::AND, 2, 5, AddressMode::IndIdx],
+//
+//     [0x0A, OpType::ASL, 1, 2, AddressMode::Accumu],
+//     [0x06, OpType::ASL, 2, 5, AddressMode::ZeroPg],
+//     [0x16, OpType::ASL, 2, 6, AddressMode::ZPIdxX],
+//     [0x0E, OpType::ASL, 3, 6, AddressMode::Absolu],
+//     [0x1E, OpType::ASL, 3, 7, AddressMode::AbIdxX],
+//
+//     [0x90, OpType::BCC, 2, 2, AddressMode::Relatv],
+//
+//     [0xB0, OpType::BCS, 2, 2, AddressMode::Relatv],
+//
+//     [0xF0, OpType::BEQ, 2, 2, AddressMode::Relatv],
+//
+//     [0x24, OpType::BIT, 2, 3, AddressMode::ZeroPg],
+//     [0x2C, OpType::BIT, 3, 4, AddressMode::Absolu],
+//
+//     [0x30, OpType::BMI, 2, 2, AddressMode::Relatv],
+//
+//     [0xD0, OpType::BNE, 2, 2, AddressMode::Relatv],
+//
+//     [0x10, OpType::BPL, 2, 2, AddressMode::Relatv],
+//
+//     [0x00, OpType::BRK, 1, 7, AddressMode::Implid],
+//
+//     [0x50, OpType::BVC, 2, 2, AddressMode::Relatv],
+//
+//     [0x70, OpType::BVS, 2, 2, AddressMode::Relatv],
+//
+//     [0x18, OpType::CLC, 1, 2, AddressMode::Implid],
+//
+//     [0xD8, OpType::CLD, 1, 2, AddressMode::Implid],
+//
+//     [0x58, OpType::CLI, 1, 2, AddressMode::Implid],
+//
+//     [0xB8, OpType::CLV, 1, 2, AddressMode::Implid],
+//
+//     [0xC9, OpType::CMP, 2, 2, AddressMode::Immedt],
+//     [0xC5, OpType::CMP, 2, 3, AddressMode::ZeroPg],
+//     [0xD5, OpType::CMP, 2, 4, AddressMode::ZPIdxX],
+//     [0xCD, OpType::CMP, 3, 4, AddressMode::Absolu],
+//     [0xDD, OpType::CMP, 3, 4, AddressMode::AbIdxX],
+//     [0xD9, OpType::CMP, 3, 4, AddressMode::AbIdxY],
+//     [0xC1, OpType::CMP, 2, 6, AddressMode::IdxInd],
+//     [0xD1, OpType::CMP, 2, 5, AddressMode::IndIdx],
+//
+//     [0xE0, OpType::CPX, 2, 2, AddressMode::Immedt],
+//     [0xE4, OpType::CPX, 2, 3, AddressMode::ZeroPg],
+//     [0xEC, OpType::CPX, 3, 4, AddressMode::Absolu],
+//
+//     [0xC0, OpType::CPY, 2, 2, AddressMode::Immedt],
+//     [0xC4, OpType::CPY, 2, 3, AddressMode::ZeroPg],
+//     [0xCC, OpType::CPY, 3, 4, AddressMode::Absolu],
+//
+//     [0xC6, OpType::DEC, 2, 5, AddressMode::ZeroPg],
+//     [0xD6, OpType::DEC, 2, 6, AddressMode::ZPIdxX],
+//     [0xCE, OpType::DEC, 3, 6, AddressMode::Absolu],
+//     [0xDE, OpType::DEC, 3, 7, AddressMode::AbIdxX],
+//
+//     [0xCA, OpType::DEX, 1, 2, AddressMode::Implid],
+//
+//     [0x88, OpType::DEY, 1, 2, AddressMode::Implid],
+//
+//     [0x49, OpType::EOR, 2, 2, AddressMode::Immedt],
+//     [0x45, OpType::EOR, 2, 3, AddressMode::ZeroPg],
+//     [0x55, OpType::EOR, 2, 4, AddressMode::ZPIdxX],
+//     [0x4D, OpType::EOR, 3, 4, AddressMode::Absolu],
+//     [0x5D, OpType::EOR, 3, 4, AddressMode::AbIdxX],
+//     [0x59, OpType::EOR, 3, 4, AddressMode::AbIdxY],
+//     [0x41, OpType::EOR, 2, 6, AddressMode::IdxInd],
+//     [0x51, OpType::EOR, 2, 5, AddressMode::IndIdx],
+//
+//     [0xE6, OpType::INC, 2, 5, AddressMode::ZeroPg],
+//     [0xF6, OpType::INC, 2, 6, AddressMode::ZPIdxX],
+//     [0xEE, OpType::INC, 3, 6, AddressMode::Absolu],
+//     [0xFE, OpType::INC, 3, 7, AddressMode::AbIdxX],
+//
+//     [0xE8, OpType::INX, 1, 2, AddressMode::Implid],
+//
+//     [0xC8, OpType::INY, 1, 2, AddressMode::Implid],
+//
+//     [0x4C, OpType::JMP, 3, 3, AddressMode::Absolu],
+//     [0x6C, OpType::JMP, 3, 5, AddressMode::Indrct],
+//
+//     [0x20, OpType::JSR, 3, 6, AddressMode::Absolu],
+//
+//     [0xA9, OpType::LDA, 2, 2, AddressMode::Immedt],
+//     [0xA5, OpType::LDA, 2, 3, AddressMode::ZeroPg],
+//     [0xB5, OpType::LDA, 2, 4, AddressMode::ZPIdxX],
+//     [0xAD, OpType::LDA, 3, 4, AddressMode::Absolu],
+//     [0xBD, OpType::LDA, 3, 4, AddressMode::AbIdxX],
+//     [0xB9, OpType::LDA, 3, 4, AddressMode::AbIdxY],
+//     [0xA1, OpType::LDA, 2, 6, AddressMode::IdxInd],
+//     [0xB1, OpType::LDA, 2, 5, AddressMode::IndIdx],
+//
+//     [0xA2, OpType::LDX, 2, 2, AddressMode::Immedt],
+//     [0xA6, OpType::LDX, 2, 3, AddressMode::ZeroPg],
+//     [0xB6, OpType::LDX, 2, 4, AddressMode::ZPIdxY],
+//     [0xAE, OpType::LDX, 3, 4, AddressMode::Absolu],
+//     [0xBE, OpType::LDX, 3, 4, AddressMode::AbIdxY],
+//
+//     [0xA0, OpType::LDY, 2, 2, AddressMode::Immedt],
+//     [0xA4, OpType::LDY, 2, 3, AddressMode::ZeroPg],
+//     [0xB4, OpType::LDY, 2, 4, AddressMode::ZPIdxX],
+//     [0xAC, OpType::LDY, 3, 4, AddressMode::Absolu],
+//     [0xBC, OpType::LDY, 3, 4, AddressMode::AbIdxX],
+//
+//     [0x4A, OpType::LSR, 1, 2, AddressMode::Accumu],
+//     [0x46, OpType::LSR, 2, 5, AddressMode::ZeroPg],
+//     [0x56, OpType::LSR, 2, 6, AddressMode::ZPIdxX],
+//     [0x4E, OpType::LSR, 3, 6, AddressMode::Absolu],
+//     [0x5E, OpType::LSR, 3, 7, AddressMode::AbIdxX],
+//
+//     [0xEA, OpType::NOP, 1, 2, AddressMode::Implid],
+//
+//     [0x09, OpType::ORA, 2, 2, AddressMode::Immedt],
+//     [0x05, OpType::ORA, 2, 3, AddressMode::ZeroPg],
+//     [0x15, OpType::ORA, 2, 4, AddressMode::ZPIdxX],
+//     [0x0D, OpType::ORA, 3, 4, AddressMode::Absolu],
+//     [0x1D, OpType::ORA, 3, 4, AddressMode::AbIdxX],
+//     [0x19, OpType::ORA, 3, 4, AddressMode::AbIdxY],
+//     [0x01, OpType::ORA, 2, 6, AddressMode::IdxInd],
+//     [0x11, OpType::ORA, 2, 5, AddressMode::IndIdx],
+//
+//     [0x48, OpType::PHA, 1, 3, AddressMode::Implid],
+//
+//     [0x08, OpType::PHP, 1, 3, AddressMode::Implid],
+//
+//     [0x68, OpType::PLA, 1, 4, AddressMode::Implid],
+//
+//     [0x28, OpType::PLP, 1, 4, AddressMode::Implid],
+//
+//     [0x2A, OpType::ROL, 1, 2, AddressMode::Accumu],
+//     [0x26, OpType::ROL, 2, 5, AddressMode::ZeroPg],
+//     [0x36, OpType::ROL, 2, 6, AddressMode::ZPIdxX],
+//     [0x2E, OpType::ROL, 3, 6, AddressMode::Absolu],
+//     [0x3E, OpType::ROL, 3, 7, AddressMode::AbIdxX],
+//
+//     [0x6A, OpType::ROR, 1, 2, AddressMode::Accumu],
+//     [0x66, OpType::ROR, 2, 5, AddressMode::ZeroPg],
+//     [0x76, OpType::ROR, 2, 6, AddressMode::ZPIdxX],
+//     [0x6E, OpType::ROR, 3, 6, AddressMode::Absolu],
+//     [0x7E, OpType::ROR, 3, 7, AddressMode::AbIdxX],
+//
+//     [0x40, OpType::RTI, 1, 6, AddressMode::Implid],
+//
+//     [0x60, OpType::RTS, 1, 6, AddressMode::Implid],
+//
+//     [0xE9, OpType::SBC, 2, 2, AddressMode::Immedt],
+//     [0xE5, OpType::SBC, 2, 3, AddressMode::ZeroPg],
+//     [0xF5, OpType::SBC, 2, 4, AddressMode::ZPIdxX],
+//     [0xED, OpType::SBC, 3, 4, AddressMode::Absolu],
+//     [0xFD, OpType::SBC, 3, 4, AddressMode::AbIdxX],
+//     [0xF9, OpType::SBC, 3, 4, AddressMode::AbIdxY],
+//     [0xE1, OpType::SBC, 2, 6, AddressMode::IdxInd],
+//     [0xF1, OpType::SBC, 2, 5, AddressMode::IndIdx],
+//
+//     [0x38, OpType::SEC, 1, 2, AddressMode::Implid],
+//
+//     [0xF8, OpType::SED, 1, 2, AddressMode::Implid],
+//
+//     [0x78, OpType::SEI, 1, 2, AddressMode::Implid],
+//
+//     [0x85, OpType::STA, 2, 3, AddressMode::ZeroPg],
+//     [0x95, OpType::STA, 2, 4, AddressMode::ZPIdxX],
+//     [0x8D, OpType::STA, 3, 4, AddressMode::Absolu],
+//     [0x9D, OpType::STA, 3, 5, AddressMode::AbIdxX],
+//     [0x99, OpType::STA, 3, 5, AddressMode::AbIdxY],
+//     [0x81, OpType::STA, 2, 6, AddressMode::IdxInd],
+//     [0x91, OpType::STA, 2, 6, AddressMode::IndIdx],
+//
+//     [0x86, OpType::STX, 2, 3, AddressMode::ZeroPg],
+//     [0x96, OpType::STX, 2, 4, AddressMode::ZPIdxY],
+//     [0x8E, OpType::STX, 3, 4, AddressMode::Absolu],
+//
+//     [0x84, OpType::STY, 2, 3, AddressMode::ZeroPg],
+//     [0x94, OpType::STY, 2, 4, AddressMode::ZPIdxX],
+//     [0x8C, OpType::STY, 3, 4, AddressMode::Absolu],
+//
+//     [0xAA, OpType::TAX, 1, 2, AddressMode::Implid],
+//
+//     [0xA8, OpType::TAY, 1, 2, AddressMode::Implid],
+//
+//     [0xBA, OpType::TSX, 1, 2, AddressMode::Implid],
+//
+//     [0x8A, OpType::TXA, 1, 2, AddressMode::Implid],
+//
+//     [0x9A, OpType::TXS, 1, 2, AddressMode::Implid],
+//
+//     [0x98, OpType::TYA, 1, 2, AddressMode::Implid],
+// ];
 
-struct Opcodes {
-    table: HashMap<u16, OpCodeEntry>,
-}
-
-impl Opcodes {
-    fn new() -> Self {
-        let mut opcode_table = [
-            OpCodeEntry{opcode: 0x69, optype: OpType::ADC, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0x65, optype: OpType::ADC, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x75, optype: OpType::ADC, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x6D, optype: OpType::ADC, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x7D, optype: OpType::ADC, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0x79, optype: OpType::ADC, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0x61, optype: OpType::ADC, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0x71, optype: OpType::ADC, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0x29, optype: OpType::AND, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0x25, optype: OpType::AND, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x35, optype: OpType::AND, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x2D, optype: OpType::AND, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x3D, optype: OpType::AND, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0x39, optype: OpType::AND, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0x21, optype: OpType::AND, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0x31, optype: OpType::AND, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0x0A, optype: OpType::ASL, bytes: 1, cycle: 2, address_mode: AddressMode::Accumu},
-            OpCodeEntry{opcode: 0x06, optype: OpType::ASL, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x16, optype: OpType::ASL, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x0E, optype: OpType::ASL, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x1E, optype: OpType::ASL, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0x90, optype: OpType::BCC, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0xB0, optype: OpType::BCS, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0xF0, optype: OpType::BEQ, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0x24, optype: OpType::BIT, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x2C, optype: OpType::BIT, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0x30, optype: OpType::BMI, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0xD0, optype: OpType::BNE, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0x10, optype: OpType::BPL, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0x00, optype: OpType::BRK, bytes: 1, cycle: 7, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x50, optype: OpType::BVC, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0x70, optype: OpType::BVS, bytes: 2, cycle: 2, address_mode: AddressMode::Relatv},
-
-            OpCodeEntry{opcode: 0x18, optype: OpType::CLC, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xD8, optype: OpType::CLD, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x58, optype: OpType::CLI, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xB8, optype: OpType::CLV, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xC9, optype: OpType::CMP, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xC5, optype: OpType::CMP, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xD5, optype: OpType::CMP, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xCD, optype: OpType::CMP, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xDD, optype: OpType::CMP, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0xD9, optype: OpType::CMP, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0xC1, optype: OpType::CMP, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0xD1, optype: OpType::CMP, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0xE0, optype: OpType::CPX, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xE4, optype: OpType::CPX, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xEC, optype: OpType::CPX, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0xC0, optype: OpType::CPY, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xC4, optype: OpType::CPY, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xCC, optype: OpType::CPY, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0xC6, optype: OpType::DEC, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xD6, optype: OpType::DEC, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xCE, optype: OpType::DEC, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xDE, optype: OpType::DEC, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0xCA, optype: OpType::DEX, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x88, optype: OpType::DEY, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x49, optype: OpType::EOR, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0x45, optype: OpType::EOR, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x55, optype: OpType::EOR, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x4D, optype: OpType::EOR, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x5D, optype: OpType::EOR, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0x59, optype: OpType::EOR, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0x41, optype: OpType::EOR, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0x51, optype: OpType::EOR, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0xE6, optype: OpType::INC, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xF6, optype: OpType::INC, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xEE, optype: OpType::INC, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xFE, optype: OpType::INC, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0xE8, optype: OpType::INX, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xC8, optype: OpType::INY, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x4C, optype: OpType::JMP, bytes: 3, cycle: 3, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x6C, optype: OpType::JMP, bytes: 3, cycle: 5, address_mode: AddressMode::Indrct},
-
-            OpCodeEntry{opcode: 0x20, optype: OpType::JSR, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0xA9, optype: OpType::LDA, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xA5, optype: OpType::LDA, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xB5, optype: OpType::LDA, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xAD, optype: OpType::LDA, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xBD, optype: OpType::LDA, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0xB9, optype: OpType::LDA, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0xA1, optype: OpType::LDA, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0xB1, optype: OpType::LDA, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0xA2, optype: OpType::LDX, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xA6, optype: OpType::LDX, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xB6, optype: OpType::LDX, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxY},
-            OpCodeEntry{opcode: 0xAE, optype: OpType::LDX, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xBE, optype: OpType::LDX, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-
-            OpCodeEntry{opcode: 0xA0, optype: OpType::LDY, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xA4, optype: OpType::LDY, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xB4, optype: OpType::LDY, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xAC, optype: OpType::LDY, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xBC, optype: OpType::LDY, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0x4A, optype: OpType::LSR, bytes: 1, cycle: 2, address_mode: AddressMode::Accumu},
-            OpCodeEntry{opcode: 0x46, optype: OpType::LSR, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x56, optype: OpType::LSR, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x4E, optype: OpType::LSR, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x5E, optype: OpType::LSR, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0xEA, optype: OpType::NOP, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x09, optype: OpType::ORA, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0x05, optype: OpType::ORA, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x15, optype: OpType::ORA, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x0D, optype: OpType::ORA, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x1D, optype: OpType::ORA, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0x19, optype: OpType::ORA, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0x01, optype: OpType::ORA, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0x11, optype: OpType::ORA, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0x48, optype: OpType::PHA, bytes: 1, cycle: 3, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x08, optype: OpType::PHP, bytes: 1, cycle: 3, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x68, optype: OpType::PLA, bytes: 1, cycle: 4, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x28, optype: OpType::PLP, bytes: 1, cycle: 4, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x2A, optype: OpType::ROL, bytes: 1, cycle: 2, address_mode: AddressMode::Accumu},
-            OpCodeEntry{opcode: 0x26, optype: OpType::ROL, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x36, optype: OpType::ROL, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x2E, optype: OpType::ROL, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x3E, optype: OpType::ROL, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0x6A, optype: OpType::ROR, bytes: 1, cycle: 2, address_mode: AddressMode::Accumu},
-            OpCodeEntry{opcode: 0x66, optype: OpType::ROR, bytes: 2, cycle: 5, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x76, optype: OpType::ROR, bytes: 2, cycle: 6, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x6E, optype: OpType::ROR, bytes: 3, cycle: 6, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x7E, optype: OpType::ROR, bytes: 3, cycle: 7, address_mode: AddressMode::AbIdxX},
-
-            OpCodeEntry{opcode: 0x40, optype: OpType::RTI, bytes: 1, cycle: 6, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x60, optype: OpType::RTS, bytes: 1, cycle: 6, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xE9, optype: OpType::SBC, bytes: 2, cycle: 2, address_mode: AddressMode::Immedt},
-            OpCodeEntry{opcode: 0xE5, optype: OpType::SBC, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0xF5, optype: OpType::SBC, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0xED, optype: OpType::SBC, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0xFD, optype: OpType::SBC, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0xF9, optype: OpType::SBC, bytes: 3, cycle: 4, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0xE1, optype: OpType::SBC, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0xF1, optype: OpType::SBC, bytes: 2, cycle: 5, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0x38, optype: OpType::SEC, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xF8, optype: OpType::SED, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x78, optype: OpType::SEI, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x85, optype: OpType::STA, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x95, optype: OpType::STA, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x8D, optype: OpType::STA, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-            OpCodeEntry{opcode: 0x9D, optype: OpType::STA, bytes: 3, cycle: 5, address_mode: AddressMode::AbIdxX},
-            OpCodeEntry{opcode: 0x99, optype: OpType::STA, bytes: 3, cycle: 5, address_mode: AddressMode::AbIdxY},
-            OpCodeEntry{opcode: 0x81, optype: OpType::STA, bytes: 2, cycle: 6, address_mode: AddressMode::IdxInd},
-            OpCodeEntry{opcode: 0x91, optype: OpType::STA, bytes: 2, cycle: 6, address_mode: AddressMode::IndIdx},
-
-            OpCodeEntry{opcode: 0x86, optype: OpType::STX, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x96, optype: OpType::STX, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxY},
-            OpCodeEntry{opcode: 0x8E, optype: OpType::STX, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0x84, optype: OpType::STY, bytes: 2, cycle: 3, address_mode: AddressMode::ZeroPg},
-            OpCodeEntry{opcode: 0x94, optype: OpType::STY, bytes: 2, cycle: 4, address_mode: AddressMode::ZPIdxX},
-            OpCodeEntry{opcode: 0x8C, optype: OpType::STY, bytes: 3, cycle: 4, address_mode: AddressMode::Absolu},
-
-            OpCodeEntry{opcode: 0xAA, optype: OpType::TAX, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xA8, optype: OpType::TAY, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0xBA, optype: OpType::TSX, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x8A, optype: OpType::TXA, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x9A, optype: OpType::TXS, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-
-            OpCodeEntry{opcode: 0x98, optype: OpType::TYA, bytes: 1, cycle: 2, address_mode: AddressMode::Implid},
-        ];
-
-        let mut table = HashMap::new();
-        for entry in opcode_table.into_iter() {
-            table[&entry.opcode] = entry;
-        }
-
-        Opcodes{table: table}
-    }
-
-    fn entry(&self, opcode: u8) -> OpCodeEntry {
-        self.table[opcode as usize]
-    }
-}
+// struct Opcodes<'a> {
+//     table: HashMap<u8, &'a OpCodeEntry<'a>>,
+// }
+//
+// impl<'a> Opcodes<'a> {
+//     fn new() -> Self {
+//
+//         let table = HashMap::new();
+//         for entry in opcode_table.into_iter() {
+//             table[&entry.opcode] = entry;
+//         }
+//
+//         Opcodes{table: table}
+//     }
+//
+//     fn entry(&self, opcode: u8) -> OpCodeEntry {
+//         self.table[opcode]
+//     }
+// }

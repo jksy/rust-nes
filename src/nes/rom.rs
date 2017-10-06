@@ -83,6 +83,11 @@ impl Rom {
         println!("CHR Len:{}", self.chr.len());
     }
 
+    pub fn read(&self, addr: &u16) -> u8 {
+        // self.chr[addr]
+        self.prg[*addr as usize]
+    }
+
     pub fn prg(&self, addr: u16) -> u8 {
         self.prg[addr as usize]
     }

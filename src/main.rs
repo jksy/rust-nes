@@ -26,22 +26,20 @@ pub fn init_sdl() {
 fn main() {
     init_sdl();
 
-    let mut a = Cpu::new();
-    a.reset();
-    a.ram[0] = 0x01;
-    a.ram[1] = 0x02;
-    a.ram[2] = 0x03;
-    a.ram[3] = 0x04;
-    a.run();
-    println!("a:{}", a.a);
-    println!("x:{}", a.x);
-    println!("y:{}", a.y);
+    let mut cpu = Cpu::new();
+    // println!("a:{}", a.a);
+    // println!("x:{}", a.x);
+    // println!("y:{}", a.y);
 
     let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
     rom.print();
-
-    let mut cpu = Cpu::new();
+    cpu.set_rom(&rom);
+    cpu.reset();
     cpu.disasm(rom);
+    // cpu.run();
+
+    // let mut cpu = Cpu::new();
+    // cpu.disasm(rom);
 
 }
 
