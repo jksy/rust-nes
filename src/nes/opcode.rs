@@ -20,22 +20,27 @@ pub enum AddressMode {
     Indrct, // Indirect : ($addr8) used only with JMP
     IdxInd, // Indexed with X Indirect : ($addr8 + X)
     IndIdx, // Indirect Indexed with Y : ($addr8) + Y
+
 }
 
 #[derive(Debug, Copy, Clone)]
 pub enum OpType {
-    ADC, AND, ASL,
+    ADC, AND, ASL, AXS, AHX, ANC, ALR, ARR,
     BCC, BCS, BEQ, BIT, BMI, BNE, BPL, BRK, BVC, BVS,
     CLC, CLD, CLI, CLV, CMP, CPX, CPY, DEC, DEX, DEY,
+    DCP,
     EOR, INC, INX, INY,
+    ISC,
     JMP, JSR,
-    LDA, LDX, LDY, LSR,
+    KIL,
+    LAS, LAX, LDA, LDX, LDY, LSR,
     NOP,
     ORA,
     PHA, PHP, PLA, PLP,
-    ROL, ROR, RTI, RTS,
-    SBC, SEC, SED, SEI, STA, STX, STY,
-    TAX, TAY, TSX, TXA, TXS, TYA,
+    ROL, ROR, RTI, RTS, RRA, RLA,
+    SAX, SBC, SEC, SED, SEI, SLO, STA, STX, STY, SHX, SHY, SRE,
+    TAX, TAY, TAS, TSX, TXA, TXS, TYA,
+    XAA,
 }
 
 // struct OpCodeEntry<'a> {

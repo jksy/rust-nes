@@ -12,6 +12,7 @@ fn upper_bits(byte: u8) -> u8 {
     byte & 0xF0
 }
 
+#[derive(Clone)]
 struct RomHeader {
     magic_number: [u8; 4],
     prg_page_count: u8,
@@ -45,6 +46,7 @@ impl RomHeader {
     }
 }
 
+#[derive(Clone)]
 pub struct Rom {
     header: RomHeader,
     prg: Bytes,
@@ -52,7 +54,7 @@ pub struct Rom {
 }
 
 impl Rom {
-    pub fn load(filename: &str) -> Result<(Rom), std::io::Error> {
+    pub fn load(filename: &str) -> Result<(Box<Rom>), std::io::Error> {
         let mut file = File::open(filename)?;
         let header = Rom::load_header(&mut file)?;
 
@@ -62,7 +64,16 @@ impl Rom {
         let mut chr = BytesMut::with_capacity(8 * 1024 * header.chr_page_count as usize);
         Rom::read_file(&mut file, &mut chr, 8 * header.chr_page_count as usize)?;
 
-        Ok(Rom{header: header, prg: prg.freeze(), chr: chr.freeze()})
+        let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
+        Ok(Box::new(rom))
+    }
+
+    pub fn empty() -> Box<Rom> {
+        let mut header: RomHeader = unsafe { mem::zeroed() };
+        let mut prg = BytesMut::with_capacity(0);
+        let mut chr = BytesMut::with_capacity(0);
+        let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
+        Box::new(rom)
     }
 
     pub fn print(&self) {
