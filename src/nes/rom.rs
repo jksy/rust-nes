@@ -95,8 +95,13 @@ impl Rom {
     }
 
     pub fn read(&self, addr: &u16) -> u8 {
+        if self.header.prg_page_count == 1 {
+            let x = *addr & 0x3FFF;
+            self.prg[x as usize]
+        } else {
+            self.prg[*addr as usize]
+        }
         // self.chr[addr]
-        self.prg[*addr as usize]
     }
 
     pub fn prg(&self, addr: u16) -> u8 {
@@ -120,7 +125,6 @@ impl Rom {
     fn read_file(file: &mut File, bytes: &mut BytesMut, read_kbyte: usize) -> Result<(), std::io::Error> {
         let mut buf = [0 as u8; 1024];
         for x in 0..read_kbyte {
-            println!("read_file:{}", x);
             file.read_exact(&mut buf)?;
             bytes.put_slice(&mut buf);
         }

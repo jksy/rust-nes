@@ -31,7 +31,7 @@ fn main() {
     // println!("x:{}", a.x);
     // println!("y:{}", a.y);
 
-    let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
+    let rom = Rom::load("nestest.nes").unwrap();
     rom.print();
     cpu.set_rom(rom.clone());
     cpu.reset();
