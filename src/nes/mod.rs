@@ -46,18 +46,14 @@ impl Nes {
     }
 
     pub fn run(&mut self) {
-        let interval = 1;
-        // let timer = timer::Timer::new();
         let (sender, receiver) = channel();
-        let counter = 0;
 
         println!("==============================");
         thread::spawn(
             move || {
                 loop {
-                    println!("=====send");
-                    thread::sleep(time::Duration::from_millis(100));
-                    let x = sender.send(0).unwrap(); println!("Sender={:?}", x);
+                    thread::sleep(time::Duration::new(0, 50_000));
+                    let x = sender.send(0).unwrap();
                 }
             });
 
@@ -71,7 +67,10 @@ impl Nes {
 
     fn tick(&mut self) {
         {
+            println!("ppu.tick()");
             let mut ppu = self.ppu.borrow_mut();
+            ppu.tick();
+            ppu.tick();
             ppu.tick();
         }
         self.cpu.tick();

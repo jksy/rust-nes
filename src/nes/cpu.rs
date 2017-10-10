@@ -211,7 +211,7 @@ impl Cpu {
             // other
             _ => {panic!("NO operand");},
         }
-        println!("decoding addr:{:x}, opcode:{:x}, optype:{:?}, byte:{}, addr_mode:{:?}", addr, opcode, optype, bytes, addr_mode);
+        println!("decoding pc:{:x}, addr:{:x}, opcode:{:x}, optype:{:?}, byte:{}, addr_mode:{:?}", self.pc, addr, opcode, optype, bytes, addr_mode);
 
         if counter - self.pc != bytes {
             panic!("error, {} != {}", counter - self.pc, bytes);

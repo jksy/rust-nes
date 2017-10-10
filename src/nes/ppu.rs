@@ -1,3 +1,5 @@
+#![feature(generators, generator_traint)]
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use nes::mapper::Mapper;
@@ -14,13 +16,20 @@ pub struct Ppu {
     vram_addr: u8,   // $2006(w*2)
     vram_data: u8,   // $2007(r/w)
     oam_dma: u8,     // $4014(w)
-    tick: u8,
-    mapper: Rc<RefCell<Box<Mapper>>>,
     vram: Vec<u8>,
+    mapper: Rc<RefCell<Box<Mapper>>>,
+    //
+    tick: u64,
+    current_line: u16,
+    current_cycle: u16,
 }
 
-const SCANLINE:i32 = 261;
-const CYCLE_PER_LINE:i32 = 341;
+const SCANLINE: i32 = 261;
+const CYCLE_PER_LINE: i32 = 341;
+
+const STATUS_OVERFLOW: u8 = 0x40u8; // sprite over flow
+const STATUS_ZERO: u8     = 0x40u8; // sprite zero hit
+const STATUS_VBLANK: u8   = 0x80u8;
 
 impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
@@ -34,41 +43,47 @@ impl Ppu {
             vram_addr:     0u8,
             vram_data:     0u8,
             oam_dma:       0u8,
-            tick:          0u8,
             mapper:        mapper,
             vram:          vec![0x00u8; 256*240*3],
+            tick:          0u64,
+            current_line: 0,
+            current_cycle: 0,
         }
     }
 
     pub fn tick(&mut self) {
-        println!("PPU Tick:{}", self.tick);
-        self.tick += 1;
+        println!("=====PPU Tick:{}", self.tick);
+        println!("self.current_line = {}, self.current_cycle = {}", self.current_line, self.current_cycle);
+        self.tick = self.tick.overflowing_add(1).0;
+        self.process_cycle();
     }
 
-    fn process_frame(&mut self) {
-        for line in -1..SCANLINE {
-            self.process_line(&line);
+    fn process_cycle(&mut self) {
+        if self.current_line < 240 {
+            self.process_pixel();
         }
-    }
 
-    fn process_line(&mut self, line: &i32) {
-        for cycle in 0..CYCLE_PER_LINE {
-            self.process_cycle(line, &cycle);
-        }
-    }
-
-    fn process_cycle(&mut self, line: &i32, cycle: &i32) {
-        self.process_pixel(line, &(*cycle - 1));
-
-        if *cycle == 1 {
-            if *line == 241 {
-                self.control = 0x01; // TODO:on vblank flag
-
+        if self.current_cycle == 1 {
+            if self.current_line == 241 {
+                self.status |= STATUS_VBLANK; // on vblank flag
+            }
+            if self.current_line == 261 {
+                self.status &= !STATUS_VBLANK; // clar vblank flag
             }
         }
+
+        self.current_cycle += 1;
+        if self.current_cycle == 261 {
+            self.current_cycle = 0;
+            self.current_line += 1;
+            if self.current_line == 341 {
+                self.current_line = 0;
+            }
+        }
+
     }
 
-    fn process_pixel(&mut self, line: &i32, cycle: &i32) {
+    fn process_pixel(&mut self) {
 
     }
 
