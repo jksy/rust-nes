@@ -2,6 +2,7 @@ mod nes;
 
 use nes::cpu::Cpu;
 use nes::rom::Rom;
+use nes::Nes;
 
 extern crate sdl2;
 
@@ -24,23 +25,28 @@ pub fn init_sdl() {
 }
 
 fn main() {
-    init_sdl();
-
-    let mut cpu = Cpu::new();
-    // println!("a:{}", a.a);
-    // println!("x:{}", a.x);
-    // println!("y:{}", a.y);
-
+    // init_sdl();
+    let mut nes = Nes::new();
     let rom = Rom::load("nestest.nes").unwrap();
-    rom.print();
-    cpu.set_rom(rom.clone());
-    cpu.reset();
-    cpu.run();
-    // cpu.disasm();
-    // cpu.run();
+    nes.set_rom(rom.clone());
+    nes.reset();
+    nes.run();
 
     // let mut cpu = Cpu::new();
-    // cpu.disasm(rom);
+    // // println!("a:{}", a.a);
+    // // println!("x:{}", a.x);
+    // // println!("y:{}", a.y);
+
+    // let rom = Rom::load("nestest.nes").unwrap();
+    // rom.print();
+    // cpu.set_rom(rom.clone());
+    // cpu.reset();
+    // cpu.run();
+    // // cpu.disasm();
+    // // cpu.run();
+
+    // // let mut cpu = Cpu::new();
+    // // cpu.disasm(rom);
 
 }
 

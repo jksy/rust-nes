@@ -2,7 +2,8 @@ use nes::rom::Rom;
 use nes::mbc::Mbc;
 use nes::opcode::{OpType, AddressMode};
 use std;
-use std::ptr::null;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub struct Cpu {
     pub a: u8,      // accumulator
@@ -11,7 +12,7 @@ pub struct Cpu {
     pub pc: u16,    // program counter
     pub s: u8,      // stack pointer
     pub p: u8,      // processor status register
-    pub mbc: Mbc,
+    pub mbc: Rc<RefCell<Box<Mbc>>>,
     pub step: u32,
     //
 }
@@ -26,198 +27,202 @@ const FLAG_OVF:u8 = 0x40; // over flow flag
 const FLAG_NEG:u8 = 0x80; // negative flag
 
 impl Cpu {
-    pub fn new() -> Self {
+    pub fn new(mbc: Rc<RefCell<Box<Mbc>>>) -> Self {
         Cpu {
             a: 0, x: 0, y: 0,
             pc: 0, s: 0, p: 0,
-            mbc: Mbc::new(Rom::empty()),
+            mbc: mbc,
             step: 0,
             }
     }
 
+    pub fn tick(&mut self) {
+        self.step += 1;
+        self.debug();
+
+        // let mut counter: u16 = self.pc;
+        let mut counter: u16 = self.pc;
+        let opcode = self.read(&mut counter);
+        let (official, optype, bytes, cycle, addr_mode) = self.decode(opcode);
+        let mut addr = self.decode_address(&addr_mode, &mut counter);
+
+        match optype {
+            OpType::CLC => { self.set_flag(FLAG_CRY, false) },
+            OpType::SEC => { self.set_flag(FLAG_CRY, true) },
+            OpType::CLI => { self.set_flag(FLAG_IRQ, false) },
+            OpType::SEI => { self.set_flag(FLAG_IRQ, true) },
+            OpType::CLV => { self.set_flag(FLAG_OVF, false) },
+            OpType::CLD => { self.set_flag(FLAG_DEC, false) },
+            OpType::SED => { self.set_flag(FLAG_DEC, true) },
+
+            // copy operators
+            OpType::LDA => {
+                self.a = self.read(&mut addr);
+                let z = self.a == 0;
+                self.set_flag(FLAG_ZER, z);
+                let n = self.a & FLAG_NEG;
+                self.set_flag(FLAG_NEG, n != 0);
+            },
+            OpType::LDX => {
+                self.x = self.read(&mut addr);
+                let z = self.x == 0;
+                self.set_flag(FLAG_ZER, z);
+                let n = self.x & FLAG_NEG;
+                self.set_flag(FLAG_NEG, n != 0);
+            },
+            OpType::LDY => {
+                self.y = self.read(&mut addr);
+                let z = self.y == 0;
+                self.set_flag(FLAG_ZER, z);
+                let n = self.y & FLAG_NEG;
+                self.set_flag(FLAG_NEG, n != 0);
+            },
+
+            OpType::STA => { let a = self.a; self.write(&mut addr, &a) },
+            OpType::STX => { let x = self.x; self.write(&mut addr, &x) },
+            OpType::STY => { let y = self.y; self.write(&mut addr, &y) },
+
+            OpType::TAX => { self.x = self.a; },
+            OpType::TAY => { self.y = self.a; },
+            OpType::TSX => { self.x = self.s; },
+            OpType::TXA => { self.a = self.x; },
+            OpType::TXS => { self.s = self.x; },
+            OpType::TYA => { self.a = self.y; },
+
+            // caluculate oprators
+            OpType::ADC => { self.a = self.a + addr as u8; },
+            OpType::AND => { self.a = self.a & addr as u8; },
+            OpType::ASL => { },
+            OpType::BIT => {
+                let value = self.read(&mut addr);
+                let z = self.a & value;
+                self.set_flag(FLAG_ZER, z == 0);
+                self.set_flag(FLAG_NEG, (value & FLAG_NEG) == 0);
+                self.set_flag(FLAG_OVF, (value & FLAG_NEG) == 0);
+            },
+            OpType::CMP => { },
+            OpType::CPX => { },
+            OpType::CPY => { },
+            OpType::DEC => {
+                let (r, overflow) = self.a.overflowing_sub(1);
+                self.set_flag(FLAG_OVF, overflow);
+                self.set_flag(FLAG_ZER, r == 0);
+                self.a = r;
+            },
+            OpType::DEX => {
+                let (r, overflow) = self.x.overflowing_sub(1);
+                self.set_flag(FLAG_OVF, overflow);
+                self.set_flag(FLAG_ZER, r == 0);
+                self.x = r;
+            },
+            OpType::DEY => {
+                let (r, overflow) = self.y.overflowing_sub(1);
+                self.set_flag(FLAG_OVF, overflow);
+                self.set_flag(FLAG_ZER, r == 0);
+                self.y = r;
+            },
+            OpType::EOR => { self.a ^= addr as u8; },
+            OpType::INC => { },
+            OpType::INX => { self.x += 1; },
+            OpType::INY => { self.y += 1; },
+            OpType::LSR => { },
+            OpType::ORA => { self.a |= addr as u8; },
+            OpType::ROL => { },
+            OpType::ROR => { },
+            OpType::SBC => { },
+
+            // STACK
+            OpType::PHA => { let a = self.a; self.push(&a) },
+            OpType::PHP => { let p = self.p; self.push(&p) },
+            OpType::PLA => { self.a = self.pop() },
+            OpType::PLP => { self.p = self.pop() },
+
+            // JMP
+            OpType::JMP => { self.pc = addr; return; },
+            OpType::JSR => {
+                self.push16(&(counter-1));
+                self.pc = addr;
+                return;
+            },
+            OpType::RTS => {
+                let retrun_address = self.pop16() + 1;
+                self.pc = retrun_address;
+                return;
+            },
+            // BRANCH
+            OpType::BCC => {
+                if !self.get_flag(FLAG_CRY) {
+                    println!("BCC Jump pc:{:x} -> {:x}", self.pc, addr);
+                    self.pc = addr;
+                    return;
+                }
+            },
+            OpType::BCS => {
+                if self.get_flag(FLAG_CRY) {
+                    self.pc = addr;
+                    println!("BCS Jump pc:{:x} -> {:x}", self.pc, addr);
+                    return;
+                }
+            },
+            OpType::BEQ => {
+                if self.get_flag(FLAG_ZER) {
+                    self.pc = addr;
+                    println!("BEQ Jump pc:{:x} -> {:x}", self.pc, addr);
+                    return;
+                }
+            },
+            OpType::BMI => {
+                if self.get_flag(FLAG_NEG) {
+                    self.pc = addr;
+                    println!("BMI Jump pc:{:x} -> {:x}", self.pc, addr);
+                    return;
+                }
+            },
+            OpType::BNE => {
+                println!("BNE: pc{:x}", self.pc);
+                if !self.get_flag(FLAG_ZER) {
+                    self.pc = addr;
+                    println!("BNE Jump pc:{:x} -> {:x}", self.pc, addr);
+                    return;
+                }
+            },
+            OpType::BPL => {
+                if !self.get_flag(FLAG_NEG) {
+                    println!("BPL Jump pc:{:x} -> {:x}", self.pc, addr);
+                    self.pc = addr;
+                    return;
+                }
+            },
+            OpType::BVC => {
+                if !self.get_flag(FLAG_OVF) {
+                    println!("BVC Jump pc:{:x} -> {:x}", self.pc, addr);
+                    self.pc = addr;
+                    return;
+                }
+            },
+            OpType::BVS => {
+                if self.get_flag(FLAG_OVF) {
+                    println!("BVS Jump pc:{:x} -> {:x}", self.pc, addr);
+                    self.pc = addr;
+                    return;
+                }
+            },
+
+            // other
+            _ => {panic!("NO operand");},
+        }
+        println!("decoding addr:{:x}, opcode:{:x}, optype:{:?}, byte:{}, addr_mode:{:?}", addr, opcode, optype, bytes, addr_mode);
+
+        if counter - self.pc != bytes {
+            panic!("error, {} != {}", counter - self.pc, bytes);
+        }
+
+        self.pc += bytes
+    }
+
     pub fn run(&mut self) {
         loop {
-            self.step += 1;
-            self.debug();
-
-            // let mut counter: u16 = self.pc;
-            let mut counter: u16 = self.pc;
-            let opcode = self.mbc.read(&mut counter);
-            let (official, optype, bytes, cycle, addr_mode) = self.decode(opcode);
-            let mut addr = self.decode_address(&addr_mode, &mut counter);
-
-            match optype {
-                OpType::CLC => { self.set_flag(FLAG_CRY, false) },
-                OpType::SEC => { self.set_flag(FLAG_CRY, true) },
-                OpType::CLI => { self.set_flag(FLAG_IRQ, false) },
-                OpType::SEI => { self.set_flag(FLAG_IRQ, true) },
-                OpType::CLV => { self.set_flag(FLAG_OVF, false) },
-                OpType::CLD => { self.set_flag(FLAG_DEC, false) },
-                OpType::SED => { self.set_flag(FLAG_DEC, true) },
-
-                // copy operators
-                OpType::LDA => {
-                    self.a = self.mbc.read(&mut addr);
-                    let z = self.a == 0;
-                    self.set_flag(FLAG_ZER, z);
-                    let n = self.a & FLAG_NEG;
-                    self.set_flag(FLAG_NEG, n != 0);
-                },
-                OpType::LDX => {
-                    self.x = self.mbc.read(&mut addr);
-                    let z = self.x == 0;
-                    self.set_flag(FLAG_ZER, z);
-                    let n = self.x & FLAG_NEG;
-                    self.set_flag(FLAG_NEG, n != 0);
-                },
-                OpType::LDY => {
-                    self.y = self.mbc.read(&mut addr);
-                    let z = self.y == 0;
-                    self.set_flag(FLAG_ZER, z);
-                    let n = self.y & FLAG_NEG;
-                    self.set_flag(FLAG_NEG, n != 0);
-                },
-
-                OpType::STA => { self.mbc.write(&mut addr, &self.a) },
-                OpType::STX => { self.mbc.write(&mut addr, &self.x) },
-                OpType::STY => { self.mbc.write(&mut addr, &self.y) },
-
-                OpType::TAX => { self.x = self.a; },
-                OpType::TAY => { self.y = self.a; },
-                OpType::TSX => { self.x = self.s; },
-                OpType::TXA => { self.a = self.x; },
-                OpType::TXS => { self.s = self.x; },
-                OpType::TYA => { self.a = self.y; },
-
-                // caluculate oprators
-                OpType::ADC => { self.a = self.a + addr as u8; },
-                OpType::AND => { self.a = self.a & addr as u8; },
-                OpType::ASL => { },
-                OpType::BIT => {
-                    let value = self.mbc.read(&mut addr);
-                    let z = self.a & value;
-                    self.set_flag(FLAG_ZER, z == 0);
-                    self.set_flag(FLAG_NEG, (value & FLAG_NEG) == 0);
-                    self.set_flag(FLAG_OVF, (value & FLAG_NEG) == 0);
-                },
-                OpType::CMP => { },
-                OpType::CPX => { },
-                OpType::CPY => { },
-                OpType::DEC => {
-                    let (r, overflow) = self.a.overflowing_sub(1);
-                    self.set_flag(FLAG_OVF, overflow);
-                    self.set_flag(FLAG_ZER, r == 0);
-                    self.a = r;
-                },
-                OpType::DEX => {
-                    let (r, overflow) = self.x.overflowing_sub(1);
-                    self.set_flag(FLAG_OVF, overflow);
-                    self.set_flag(FLAG_ZER, r == 0);
-                    self.x = r;
-                },
-                OpType::DEY => {
-                    let (r, overflow) = self.y.overflowing_sub(1);
-                    self.set_flag(FLAG_OVF, overflow);
-                    self.set_flag(FLAG_ZER, r == 0);
-                    self.y = r;
-                },
-                OpType::EOR => { self.a ^= addr as u8; },
-                OpType::INC => { },
-                OpType::INX => { self.x += 1; },
-                OpType::INY => { self.y += 1; },
-                OpType::LSR => { },
-                OpType::ORA => { self.a |= addr as u8; },
-                OpType::ROL => { },
-                OpType::ROR => { },
-                OpType::SBC => { },
-
-                // STACK
-                OpType::PHA => { let a = self.a; self.push(&a) },
-                OpType::PHP => { let p = self.p; self.push(&p) },
-                OpType::PLA => { self.a = self.pop() },
-                OpType::PLP => { self.p = self.pop() },
-
-                // JMP
-                OpType::JMP => { self.pc = addr; continue; },
-                OpType::JSR => {
-                    self.push16(&(counter-1));
-                    self.pc = addr;
-                    continue;
-                },
-                OpType::RTS => {
-                    let retrun_address = self.pop16() + 1;
-                    self.pc = retrun_address;
-                    continue;
-                },
-                // BRANCH
-                OpType::BCC => {
-                    if !self.get_flag(FLAG_CRY) {
-                        println!("BCC Jump pc:{:x} -> {:x}", self.pc, addr);
-                        self.pc = addr;
-                        continue;
-                    }
-                },
-                OpType::BCS => {
-                    if self.get_flag(FLAG_CRY) {
-                        self.pc = addr;
-                        println!("BCS Jump pc:{:x} -> {:x}", self.pc, addr);
-                        continue;
-                    }
-                },
-                OpType::BEQ => {
-                    if self.get_flag(FLAG_ZER) {
-                        self.pc = addr;
-                        println!("BEQ Jump pc:{:x} -> {:x}", self.pc, addr);
-                        continue;
-                    }
-                },
-                OpType::BMI => {
-                    if self.get_flag(FLAG_NEG) {
-                        self.pc = addr;
-                        println!("BMI Jump pc:{:x} -> {:x}", self.pc, addr);
-                        continue;
-                    }
-                },
-                OpType::BNE => {
-                    println!("BNE: pc{:x}", self.pc);
-                    if !self.get_flag(FLAG_ZER) {
-                        self.pc = addr;
-                        println!("BNE Jump pc:{:x} -> {:x}", self.pc, addr);
-                        continue;
-                    }
-                },
-                OpType::BPL => {
-                    if !self.get_flag(FLAG_NEG) {
-                        println!("BPL Jump pc:{:x} -> {:x}", self.pc, addr);
-                        self.pc = addr;
-                        continue;
-                    }
-                },
-                OpType::BVC => {
-                    if !self.get_flag(FLAG_OVF) {
-                        println!("BVC Jump pc:{:x} -> {:x}", self.pc, addr);
-                        self.pc = addr;
-                        continue;
-                    }
-                },
-                OpType::BVS => {
-                    if self.get_flag(FLAG_OVF) {
-                        println!("BVS Jump pc:{:x} -> {:x}", self.pc, addr);
-                        self.pc = addr;
-                        continue;
-                    }
-                },
-
-                // other
-                _ => {panic!("NO operand");},
-            }
-            println!("decoding addr:{:x}, opcode:{:x}, optype:{:?}, byte:{}, addr_mode:{:?}", addr, opcode, optype, bytes, addr_mode);
-
-            if counter - self.pc != bytes {
-                panic!("error, {} != {}", counter - self.pc, bytes);
-            }
-
-            self.pc += bytes
+            self.tick();
         }
     }
 
@@ -242,9 +247,21 @@ impl Cpu {
         println!("=============");
     }
 
+    fn read(&mut self, addr: &mut u16) -> u8 {
+        self.mbc.borrow().read(addr)
+    }
+
+    fn read16(&mut self, addr: &mut u16) -> u16 {
+        self.mbc.borrow().read16(addr)
+    }
+
+    fn write(&self, addr: &mut u16, data: &u8) {
+        self.mbc.borrow_mut().write(addr, data)
+    }
+
     fn push(&mut self, data: &u8) {
         let addr = self.s as u16;
-        self.mbc.write(&addr, data);
+        self.mbc.borrow_mut().write(&addr, data);
         self.s += 1;
     }
 
@@ -257,7 +274,7 @@ impl Cpu {
 
     fn pop(&mut self) -> u8 {
         let mut addr = self.s as u16;
-        let data = self.mbc.read(&mut addr);
+        let data = self.mbc.borrow().read(&mut addr);
         self.s -= 1;
         data
     }
@@ -268,11 +285,7 @@ impl Cpu {
         (high << 8) | low
     }
 
-    pub fn set_rom(&mut self, rom: Box<Rom>) {
-        self.mbc.set_rom(rom);
-    }
-
-    fn decode(&mut self, opcode: u8) -> (bool, OpType, u16, u16, AddressMode) {
+    fn decode(&self, opcode: u8) -> (bool, OpType, u16, u16, AddressMode) {
         let r = match opcode {
             0x00 => (true , OpType::BRK, 1, 0, AddressMode::Implid),
             0x01 => (true , OpType::ORA, 2, 6, AddressMode::IdxInd),
@@ -537,11 +550,11 @@ impl Cpu {
         r
     }
 
-    fn decode_address(&self, address_mode: &AddressMode, pc: &mut u16) -> u16 {
-        println!("decode_address:{:?}, self.pc:{:x}, self.pc:{:x}", address_mode, self.pc, pc);
+    fn decode_address(&mut self, address_mode: &AddressMode, pc: &mut u16) -> u16 {
+        println!("decode_address:{:?}, self.pc:{:x}", address_mode, pc);
         let result = match *address_mode {
             AddressMode::Immedt => { // Immediate : #value
-                let offset = self.mbc.read(pc) as i8 as i16 as u16;
+                let offset = self.read(pc) as i8 as i16 as u16;
                 pc.overflowing_add(offset).0
             },
             AddressMode::Implid => { // Implied : no operand
@@ -551,47 +564,47 @@ impl Cpu {
                 self.a as u16
             },
             AddressMode::Relatv => { // Relative : $addr8 used with branch instructions
-                let offset = self.mbc.read16(pc) as i16;
+                let offset = self.read16(pc) as i16;
                 let mut addr = (*pc as i16 + offset) as u16;
-                self.mbc.read16(&mut addr)
+                self.read16(&mut addr)
             },
             AddressMode::ZeroPg => {    // Zero Page : $addr8
-                let mut addr = self.mbc.read(pc) as u16;
-                self.mbc.read(&mut addr) as u16
+                let mut addr = self.read(pc) as u16;
+                self.read(&mut addr) as u16
             }
             AddressMode::ZPIdxX => {    // Zero Page Indexed with X : $addr8 + X
                 let mut addr = (*pc + self.x as u16) | 0xFF;
-                self.mbc.read(&mut addr) as u16
+                self.read(&mut addr) as u16
             },
             AddressMode::ZPIdxY => { // Zero Page Indexed with Y : $addr8 + Y
                 let mut addr = (*pc + self.y as u16) | 0xFF;
-                self.mbc.read(&mut addr) as u16
+                self.read(&mut addr) as u16
             },
             AddressMode::Absolu => { // Absolute : $addr16
-                let mut addr = self.mbc.read16(pc);
-                // self.mbc.read(&addr) as u16
+                let mut addr = self.read16(pc);
+                // self.read(&addr) as u16
                 addr
             },
             AddressMode::AbIdxX => { // Absolute Indexed with X : $addr16 + X
-                let mut addr = self.mbc.read16(pc) + self.x as u16;
-                self.mbc.read(&mut addr) as u16
+                let mut addr = self.read16(pc) + self.x as u16;
+                self.read(&mut addr) as u16
             },
             AddressMode::AbIdxY => { // Absolute Indexed with Y : $addr16 + Y
-                let mut addr = self.mbc.read16(pc) + self.y as u16;
-                self.mbc.read(&mut addr) as u16
+                let mut addr = self.read16(pc) + self.y as u16;
+                self.read(&mut addr) as u16
             },
             AddressMode::Indrct => { // Indirect : ($addr8) used only with JMP
-                let mut addr = self.mbc.read16(pc);
+                let mut addr = self.read16(pc);
                 addr
             },
             AddressMode::IdxInd => { // Indexed with X Indirect : ($addr8 + X)
-                let mut zp_addr = ((self.mbc.read(pc) + self.x) | 0xFFu8) as u16;
-                let mut addr = self.mbc.read16(&mut zp_addr);
-                self.mbc.read16(&mut addr)
+                let mut zp_addr = ((self.read(pc) + self.x) | 0xFFu8) as u16;
+                let mut addr = self.read16(&mut zp_addr);
+                self.read16(&mut addr)
             },
             AddressMode::IndIdx => { // Indirect Indexed with Y : ($addr8) + Y
-                let mut arg = self.mbc.read(pc) as u16;
-                let mut addr = self.mbc.read16(&mut arg) + self.y as u16;
+                let mut arg = self.read(pc) as u16;
+                let mut addr = self.read16(&mut arg) + self.y as u16;
                 addr
             },
         };
@@ -612,11 +625,20 @@ impl Cpu {
     }
 
     pub fn reset(&mut self) {
-        self.pc = self.mbc.vector("reset");
+        self.pc = self.vector("reset");
         println!("reset vector:{:x}", self.pc);
 
         self.s = 0xFF;
     }
 
+    fn vector(&mut self, name: &str) -> u16 {
+        let mut addr = match name {
+            "nmi"   => {0xFFFAu16}
+            "reset" => {0xFFFCu16}
+            "irq"   => {0xFFFEu16}
+            _       => {panic!("invalid vector name:{}", name)}
+        };
+        self.read16(&mut addr)
+    }
 }
 
