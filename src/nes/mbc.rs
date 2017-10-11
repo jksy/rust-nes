@@ -27,7 +27,7 @@ impl Mbc {
     }
 
     pub fn read(&self, addr: &mut u16) -> u8 {
-        print!("Mbc::read({:x})", *addr);
+        // print!("Mbc::read({:x})", *addr);
         let x = match *addr {
             0x0000u16...0x1FFFu16 => self.ram[*addr as usize],
             0x2000u16...0x2007u16 => self.ppu.borrow().read(addr),
@@ -42,7 +42,7 @@ impl Mbc {
             _ => panic!("mbc read error:#{:x}", *addr)
 
         };
-        println!("-> {:x}", x);
+        // println!("-> {:x}", x);
         *addr += 1;
         x as u8
     }
@@ -53,21 +53,22 @@ impl Mbc {
 
 
     pub fn write(&mut self, addr: &u16, value: &u8) {
-        println!("Mbc::write({:x},{:x})", *addr, *value);
+        // println!("Mbc::write({:x},{:x})", *addr, *value);
         match *addr {
             0x0000u16...0x1FFFu16 => {
                 let prev = self.ram[*(addr) as usize];
-                println!("({:x} -> {:x})", prev, *value);
+                // println!("({:x} -> {:x})", prev, *value);
                 self.ram[(*addr) as usize] = *value
             },
             0x2000u16...0x2007u16 => {
                 self.ppu.borrow_mut().write(addr, value)
             },
-            // 0x2000u16...0x3FFFu16 => self.io[],
-            // 0x4000u16...0x5FFFu16 => self.io[],
+            // 0x2000u16...0x3FFFu16 => self.io[], // dont use
+            0x4000u16...0x401Fu16 => {}, // ignore(APU, etc)
+            // 0x4020u16...0x5FFFu16 => self.io[], // extend ram
             // 0x6000u16...0x7FFFu16 => self.sram[],
             0x8000u16...0xFFFFu16 => panic!("cant write to ROM:{:x}", *addr),
-             _ => panic!("mbc write error:#{}", *addr)
+             _ => panic!("mbc write error:#{:x}", *addr)
         };
     }
 }

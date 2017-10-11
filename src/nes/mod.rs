@@ -52,22 +52,20 @@ impl Nes {
         thread::spawn(
             move || {
                 loop {
-                    thread::sleep(time::Duration::new(0, 50_000));
+                    thread::sleep(time::Duration::new(0, 5_00));
                     let x = sender.send(0).unwrap();
                 }
             });
 
         loop {
-            println!("=====recv");
             let r = receiver.recv().unwrap();
-            println!("Receiver:{:?}", r);
             self.tick();
         }
     }
 
     fn tick(&mut self) {
         {
-            println!("ppu.tick()");
+            // println!("ppu.tick()");
             let mut ppu = self.ppu.borrow_mut();
             ppu.tick();
             ppu.tick();
