@@ -43,7 +43,8 @@ impl Mbc {
 
         };
         // println!("-> {:x}", x);
-        *addr += 1;
+        let (r, overflow) =  (*addr).overflowing_add(1);
+        *addr = r;
         x as u8
     }
 

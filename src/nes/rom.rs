@@ -8,10 +8,6 @@ use self::bytes::{BytesMut, Bytes, BufMut, Buf};
 use std::mem;
 use std::slice;
 
-fn upper_bits(byte: u8) -> u8 {
-    byte & 0xF0
-}
-
 #[derive(Clone)]
 struct RomHeader {
     magic_number: [u8; 4],
@@ -32,8 +28,8 @@ impl RomHeader {
     }
 
     fn mapper(&self) -> u16 {
-        let lower = upper_bits(self.flags6) as u16;
-        let upper = upper_bits(self.flags7) as u16;
+        let lower = (self.flags6 & 0xF0) as u16;
+        let upper = (self.flags7 & 0xF0) as u16;
         lower | upper << 4
     }
 

@@ -1,7 +1,5 @@
-use nes::rom::Rom;
 use nes::mbc::Mbc;
 use nes::opcode::{OpType, AddressMode};
-use std;
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -56,7 +54,7 @@ macro_rules !cmp {
             let target = $target;
             let value = $value as u8;
             $self.set_flag(FLAG_CRY, target < value);
-            $self.set_flag(FLAG_ZER, target == 0u8);
+            $self.set_flag(FLAG_ZER, target == value);
         }
 
     }
@@ -86,6 +84,120 @@ macro_rules !branch {
     }
 }
 
+trait AddressingMode {
+    fn read(&self) -> u8;
+    fn write(&self, data u8);
+}
+
+struct ImmediateAddressingMode;
+impl AddressingMode for ImmediateAddressingMode {
+    fn read(&self) -> u8 {
+        let offset = cpu.read(pc) as i8 as i16 as u16;
+        pc.overflowing_add(offset).0
+    };
+    fn write(&self, data u8) {
+        panic!("cant call ImmediateAddressingMode::write()");
+    }
+}
+
+struct ZeroPageAddressingMode;
+impl AddressingMode for ZeroPageAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        cpu.write(argument)
+    }
+}
+struct ZeroPageXAddressingMode;
+impl AddressingMode for ZeroPageXAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        cpu.write(argument)
+    }
+}
+
+struct ZeroPageYAddressingMode;
+impl AddressingMode for ZeroPageYAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        cpu.write(argument)
+    }
+}
+
+struct RelativeAddressingMode;
+impl AddressingMode for RelativeAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        argument + cpu.pc
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        panic!("cant call RelativeAddressingMode::write()");
+    }
+}
+
+struct AbsoluteAddressingMode;
+impl AddressingMode for AbsoluteAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        panic!("cant call RelativeAddressingMode::write()");
+    }
+}
+
+struct AbsoluteXAddressingMode;
+impl AddressingMode for AbsoluteXAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+
+    }
+}
+
+struct AbsoluteYAddressingMode;
+impl AddressingMode for AbsoluteYAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+
+    }
+}
+
+struct IndirectAddressingMode;
+impl AddressingMode for IndirectAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+
+    }
+}
+
+struct IndirectXAddressingMode;
+impl AddressingMode for IndirectXAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+
+    }
+}
+
+struct IndirectYAddressingMode;
+impl AddressingMode for IndirectYAddressingMode {
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        cpu.read(argument)
+    };
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+
+    }
+}
 
 impl Cpu {
     pub fn new(mbc: Rc<RefCell<Box<Mbc>>>) -> Self {
@@ -98,19 +210,31 @@ impl Cpu {
     }
 
     pub fn tick(&mut self) {
-        println!("================");
         self.step += 1;
         self.debug();
 
+        if self.pc < 0xc000 {
+            panic!("== invalidate pc:${:x}", self.pc);
+        }
         // let mut counter: u16 = self.pc;
         let mut counter: u16 = self.pc;
         let opcode = self.read(&mut counter);
         let (official, optype, bytes, cycle, addr_mode) = self.decode(opcode);
         let mut addr = self.decode_address(&addr_mode, &mut counter);
 
-        println!("self.pc:{:x}, optype:{:?}({:x}), addr:{:x}({:?}), bytes:{:x}", self.pc, optype, opcode, addr, addr_mode, bytes);
+        println!("optype:{:?}({:x}), addr:{:x}({:?}), bytes:{:x}", optype, opcode, addr, addr_mode, bytes);
 
         match optype {
+            OpType::BRK => {
+                let pc = self.pc;
+                self.push16(&pc);
+                let p = self.p;
+                self.push(&p);
+                self.set_flag(FLAG_IRQ, true);
+                let mut vector = self.vector("irq");
+                self.pc = self.read16(&mut vector);
+                return
+            },
             OpType::CLC => { self.set_flag(FLAG_CRY, false) },
             OpType::SEC => { self.set_flag(FLAG_CRY, true) },
             OpType::CLI => { self.set_flag(FLAG_IRQ, false) },
@@ -158,14 +282,61 @@ impl Cpu {
             OpType::DEX => { sub!(self, self.x, 1) },
             OpType::DEY => { sub!(self, self.y, 1) },
             OpType::EOR => { self.a ^= addr as u8; },
-            // OpType::INC => { },
+            OpType::INC => {
+                let mut data = self.read(&mut addr);
+                add!(self, data, 1);
+                let mut write_addr = addr - 1;
+                self.write(&mut write_addr, &data);
+            },
             OpType::INX => { add!(self, self.x, 1) },
             OpType::INY => { add!(self, self.y, 1) },
-            // OpType::LSR => { },
+            OpType::LSR => {
+                let carry = (self.a & 0x01) != 0;
+                self.set_flag(FLAG_CRY, carry);
+                let result = self.a >> 1;
+                self.set_flag(FLAG_ZER, result == 0);
+                self.set_flag(FLAG_NEG, (result & 0x80) != 0);
+                self.a = result
+            },
             OpType::ORA => { self.a |= addr as u8; },
-            //OpType::ROL => { },
-            //OpType::ROR => { },
-            //OpType::SBC => { },
+            OpType::ROL => {
+                let data = self.read(&mut addr);
+                let result = (data >> 7) | (data << 1);
+                addr = addr - 1;
+                self.write(&mut addr, &result);
+            },
+            OpType::ROR => {
+                let data = self.read(&mut addr);
+                let result = (data << 7) | (data >> 1);
+                addr = addr - 1;
+                self.write(&mut addr, &result);
+            },
+            OpType::SRE => {
+                let mut data = self.read(&mut addr);
+                self.set_flag(FLAG_CRY, (data & 0x01) != 0);
+                data >>= 1;
+                addr = addr - 1;
+                self.write(&mut addr, &data);
+            },
+            OpType::SBC => {
+                let data = self.read(&mut addr) ^ 0xFF;
+                let mut temp = self.a;
+                {
+                    let (r, _) = temp.overflowing_add(data);
+                    temp = r;
+                }
+                {
+                    let (r, _) = temp.overflowing_add(self.s & FLAG_CRY);
+                    temp = r;
+                }
+                self.set_flag(FLAG_CRY, (temp & 0x80) != 0);
+                self.set_flag(FLAG_NEG, (temp & 0x80) != 0);
+                self.set_flag(FLAG_ZER, temp == 0);
+                let a_xor = self.a ^ temp;
+                let data_xor = data ^ temp;
+                self.set_flag(FLAG_OVF, (a_xor & data_xor & 0x80) != 0);
+                self.a = temp;
+            },
 
             // STACK
             OpType::PHA => { let a = self.a; self.push(&a) },
@@ -176,18 +347,25 @@ impl Cpu {
             // JMP
             OpType::JMP => { self.pc = addr; return; },
             OpType::JSR => {
-                let p = self.pc - 1;
                 println!("self.pc({:x}) => {:x}", self.pc, addr);
-                self.push16(&p);
+                self.push16(&counter);
                 self.pc = addr;
                 return;
             },
             OpType::RTS => {
-                let retrun_address = self.pop16() + 1;
-                println!("self.pc({:x}) => {:x}", self.pc, retrun_address);
-                self.pc = retrun_address;
+                let return_addr = self.pop16();
+                println!("self.pc({:x}) => {:x}", self.pc, return_addr);
+                self.pc = return_addr;
                 return;
             },
+            OpType::RTI => {
+                let flag = (self.pop() & FLAG_IRQ) != 0;
+                self.set_flag(FLAG_IRQ, flag);
+                let return_addr = self.pop16() + 1;
+                println!("self.pc({:x}) => {:x}", self.pc, return_addr);
+                self.pc = addr;
+                return
+            }
             // BRANCH
             OpType::BCC => { branch!(self, "BCC", FLAG_CRY, addr, false) },
             OpType::BCS => { branch!(self, "BCS", FLAG_CRY, addr, true ) },
@@ -198,13 +376,14 @@ impl Cpu {
             OpType::BVC => { branch!(self, "BVC", FLAG_OVF, addr, false) },
             OpType::BVS => { branch!(self, "BVS", FLAG_OVF, addr, true ) },
 
+
             // other
+            OpType::NOP => { },
             _ => {panic!("NO operand:{:?}", optype);},
         }
-        println!("decoding pc:{:x}, addr:{:x}, opcode:{:x}, optype:{:?}, byte:{}, addr_mode:{:?}", self.pc, addr, opcode, optype, bytes, addr_mode);
 
         if counter - self.pc != bytes {
-            panic!("error, {} != {}", counter - self.pc, bytes);
+            panic!("PC({:x}) error, {} != {}", self.pc, counter - self.pc, bytes);
         }
 
         self.pc += bytes
@@ -213,12 +392,11 @@ impl Cpu {
     fn debug(&mut self) {
         let mut addr = 0x02u16;
         let test_result = self.read16(&mut addr);
-        println!("=====CPU=step:{}====", self.step);
-        println!("a:{:x}", self.a);
-        println!("x:{:x}", self.x);
-        println!("y:{:x}", self.y);
-        println!("pc:{:x}",self.pc);
-        println!("s:{:x}", self.s);
+        println!("=====CPU(step:[{:07}],pc:[{:02x}]====", self.step, self.pc);
+        print!("a:{:02x}", self.a);
+        print!(" x:{:02x}", self.x);
+        print!(" y:{:02x}", self.y);
+        println!(" s:{:02x}", self.s);
         println!("p[{:x}] CRY:{}, ZER:{}, IRQ:{}, DEC:{}, BRK:{}, RSV:{}, OVF:{}, NEG:{}",
                  self.p,
                  (self.p & FLAG_CRY) != 0,
@@ -231,7 +409,6 @@ impl Cpu {
                  (self.p & FLAG_NEG) != 0,
                  );
         println!("test_result:0x{:x}", test_result);
-        println!("=============");
     }
 
     fn read(&mut self, addr: &mut u16) -> u8 {
@@ -242,36 +419,48 @@ impl Cpu {
         self.mbc.borrow().read16(addr)
     }
 
+    fn read16bug(&mut self, addr: &u16) -> u16 {
+        println!("read16bug({:x})", *addr);
+        let mut a = *addr;
+        let mut b = (a & 0xFF00u16) | (((a & 0x00FFu16) + 1) & 0x00FF);
+        let low = self.read(&mut a) as u16;
+        let high = self.read(&mut b) as u16;
+        println!("high:{:x}, low:{:x}", high, low);
+        high << 8 | low
+    }
+
     fn write(&self, addr: &mut u16, data: &u8) {
         self.mbc.borrow_mut().write(addr, data)
     }
 
     fn push(&mut self, data: &u8) {
         let addr = self.s as u16 + 0x0100;
+        println!("push(addr => {:x}, data => {:x})", addr, *data);
         self.mbc.borrow_mut().write(&addr, data);
         self.s -= 1;
     }
 
     fn push16(&mut self, data: &u16) {
         println!("push16(self.s:{:x}, {:x})", self.s, *data);
-        let low = (*data | 0xFF) as u8;
+        let low = (*data & 0xFF) as u8;
         let high = (*data >> 8) as u8;
         self.push(&low);
         self.push(&high);
     }
 
     fn pop(&mut self) -> u8 {
-        let mut addr = (self.s as u16) + 1 + 0x0100;
-        let data = self.mbc.borrow().read(&mut addr);
         self.s += 1;
+        let mut addr = (self.s as u16) + 0x0100;
+        let data = self.mbc.borrow().read(&mut addr);
+        // println!("pop(addr => {:x}, data => {:x})", addr, data);
         data
     }
 
     fn pop16(&mut self) -> u16 {
+        // println!("pop() => low({:x})", low);
         let high = self.pop() as u16;
-        println!("pop() => high({:x})", high);
         let low = self.pop() as u16;
-        println!("pop() => low({:x})", low);
+        println!("pop() => high({:x})", high);
         let data = (high << 8) | low;
         println!("pop16(self.s:{:x}, {:x})", self.s, data);
         data
@@ -560,7 +749,8 @@ impl Cpu {
             },
             AddressMode::ZeroPg => {    // Zero Page : $addr8
                 let mut addr = self.read(pc) as u16;
-                self.read(&mut addr) as u16
+                // self.read(&mut addr) as u16
+                addr
             }
             AddressMode::ZPIdxX => {    // Zero Page Indexed with X : $addr8 + X
                 let mut addr = (*pc + self.x as u16) | 0xFF;
@@ -584,26 +774,17 @@ impl Cpu {
                 self.read(&mut addr) as u16
             },
             AddressMode::Indrct => { // Indirect : ($addr8) used only with JMP
-                println!("Indrct: pc:#{:x}", pc);
-                let mut addr = self.read16(pc);
-                println!("addr:{:x}", addr);
-                let mut low = self.read(&mut addr.clone()) as u16;
-                println!("low:{:x}", low);
-                let mut high_addr = (addr & 0xFF00u16) | ((addr + 1) & 0x00FF);
-                println!("high_addr:{:x}", high_addr);
-                let mut high = self.read(&mut high_addr) as u16;
-                println!("high:{:x}", high);
-
-                (high << 8 | low)
+                let addr = self.read16(pc);
+                self.read16bug(&addr)
             },
             AddressMode::IdxInd => { // Indexed with X Indirect : ($addr8 + X)
-                let mut zp_addr = ((self.read(pc) + self.x) | 0xFFu8) as u16;
-                let mut addr = self.read16(&mut zp_addr);
+                let mut zp_addr = self.read(pc) as u16 + self.x as u16;
+                let mut addr = self.read16bug(&mut zp_addr);
                 self.read16(&mut addr)
             },
             AddressMode::IndIdx => { // Indirect Indexed with Y : ($addr8) + Y
                 let mut arg = self.read(pc) as u16;
-                let mut addr = self.read16(&mut arg) + self.y as u16;
+                let mut addr = self.read16bug(&mut arg) + self.y as u16;
                 addr
             },
         };

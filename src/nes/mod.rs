@@ -52,7 +52,7 @@ impl Nes {
         thread::spawn(
             move || {
                 loop {
-                    thread::sleep(time::Duration::new(0, 5_00));
+                    thread::sleep(time::Duration::new(0, 50));
                     let x = sender.send(0).unwrap();
                 }
             });
