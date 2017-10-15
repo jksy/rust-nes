@@ -607,17 +607,17 @@ impl Cpu {
 
     fn zeropage(&mut self) -> MemoryAddressingMode {
         let addr = self.read(self.pc) as u16;
-        MemoryAddressingMode::new(addr, 0)
+        MemoryAddressingMode::new(addr, 1)
     }
 
     fn zeropagex(&mut self) -> MemoryAddressingMode {
         let addr = ((self.pc + self.x as u16) | 0xFF) as u16;
-        MemoryAddressingMode::new(addr, 0)
+        MemoryAddressingMode::new(addr, 1)
     }
 
     fn zeropagey(&mut self) -> MemoryAddressingMode {
         let addr = ((self.pc as u16 + self.y as u16) | 0xFF) as u16;
-        MemoryAddressingMode::new(addr, 0)
+        MemoryAddressingMode::new(addr, 1)
     }
 
     fn immediate(&mut self) -> ImmediateAddressingMode {
