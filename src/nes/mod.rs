@@ -3,7 +3,6 @@ extern crate chrono;
 
 pub mod cpu;
 pub mod rom;
-pub mod opcode;
 pub mod mbc;
 pub mod ppu;
 pub mod mapper;

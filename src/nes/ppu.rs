@@ -101,40 +101,39 @@ impl Ppu {
 
     }
 
-    pub fn read(&self, addr: &u16) -> u8 {
-        match *addr {
+    pub fn read(&self, addr: u16) -> u8 {
+        match addr {
             0x2002 => self.status,
             0x2004 => self.oam_data,
             0x2007 => self.vram_data,
-            _ => panic!("PPU read error:#{:x}", *addr)
+            _ => panic!("PPU read error:#{:x}", addr)
         }
     }
 
-    pub fn write(&mut self, addr: &u16, data: &u8) {
-        match *addr {
+    pub fn write(&mut self, addr: u16, data: u8) {
+        match addr {
             0x2000 => {
-                self.control = *data;
+                self.control = data;
                 self.vram_write_addr.truncate(0);
             },
-            0x2001 => self.mask = *data,
-            // 0x2003 => self.oam_address = *data,
-            // 0x2004 => self.oam_data = *data,
+            0x2001 => self.mask = data,
+            // 0x2003 => self.oam_address = data,
+            // 0x2004 => self.oam_data = data,
             0x2005 => {
-                self.scroll_position.insert(0, *data);
+                self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
             },
             0x2006 => {
-                self.vram_write_addr.insert(0, *data);
+                self.vram_write_addr.insert(0, data);
                 self.vram_write_addr.truncate(2);
             },
             0x2007 => {
                 let mut address = self.vram_write_addr[0] as u16;
                 address |= (self.vram_write_addr[1] as u16) << 8;
                 println!("write PPU:vram[{:x}] = {:x}", address, data);
-                self.vram[address as usize] = *data;
-
+                self.vram[address as usize] = data;
             },
-            _ => panic!("PPU write error:#{:x},#{:x}", *addr, *data)
+            _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
         }
     }
 }
