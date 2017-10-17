@@ -19,19 +19,27 @@ pub struct Ppu {
     vram: Vec<u8>,   // 0x0000-0x1FFF:Pattern
                      // 0x3F00-0x3F1F:Pallete
     mapper: Rc<RefCell<Box<Mapper>>>,
-    //
     tick: u64,
     current_line: u16,
     current_cycle: u16,
     vram_write_addr: Vec<u8>,
     scroll_position: Vec<u8>,
+    is_raise_nmi:    bool, // true:when raise interruput
 }
+
+const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
+const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
+const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
+const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
+const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
+const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
+const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
 
 const SCANLINE: i32 = 261;
 const CYCLE_PER_LINE: i32 = 341;
 
 const STATUS_OVERFLOW : u8 = 0x20u8; // sprite over flow
-const STATUS_ZERO     : u8 = 0x40u8; // sprite zero hit
+const STATUS_SPRITE   : u8 = 0x40u8; // sprite zero hit
 const STATUS_VBLANK   : u8 = 0x80u8;
 
 const MASK_GRAY                     :u8 = 0x01u8;
@@ -62,6 +70,7 @@ impl Ppu {
             current_cycle: 0,
             vram_write_addr:          vec![],
             scroll_position:          vec![],
+            is_raise_nmi   : false,
         }
     }
 
@@ -70,6 +79,23 @@ impl Ppu {
         // println!("self.current_line = {}, self.current_cycle = {}", self.current_line, self.current_cycle);
         self.tick = self.tick.overflowing_add(1).0;
         self.process_cycle();
+
+        println!("control:#{:02x}", self.control);
+
+        if self.current_line == 0 && self.current_cycle == 0 {
+            self.print_bg_name_table();
+        }
+    }
+
+    fn print_bg_name_table(&self) {
+        println!("======== BG NAME TABLE =====");
+        let addr = self.name_table_addr();
+        for y in 0..30 {
+            let start = (addr + y * 32) as usize;
+            let end = start + 32;
+            let s = String::from_utf8_lossy(&self.vram[start..end]);
+            println!("{:02}:{}", y, s);
+        }
     }
 
     fn process_cycle(&mut self) {
@@ -80,9 +106,11 @@ impl Ppu {
         if self.current_cycle == 1 {
             if self.current_line == 241 {
                 self.status |= STATUS_VBLANK; // on vblank flag
+                self.is_raise_nmi = true;
             }
             if self.current_line == 261 {
                 self.status &= !STATUS_VBLANK; // clar vblank flag
+                self.is_raise_nmi = false;
             }
         }
 
@@ -98,7 +126,29 @@ impl Ppu {
     }
 
     fn process_pixel(&mut self) {
+        // self.name_table_addr()
+        // self.current_line;  // y
+        // self.current_cycle; // x
+    }
 
+    fn name_table_addr(&self) -> u16 {
+        match self.control &  CONTROL_MASK_NAME_TABLE_ADDR {
+            0 => 0x2000u16,
+            1 => 0x2400u16,
+            2 => 0x2800u16,
+            3 => 0x2C00u16,
+            _ => {unreachable!()}
+        }
+    }
+
+    fn nametable_increment_value(&self) -> u16 {
+        match self.control & CONTROL_MASK_ADDR_INCREMENT {
+            0 => 1,
+            _ => 32,
+        }
+    }
+
+    fn raise_nmi() {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
@@ -132,8 +182,22 @@ impl Ppu {
                 address |= (self.vram_write_addr[1] as u16) << 8;
                 println!("write PPU:vram[{:x}] = {:x}", address, data);
                 self.vram[address as usize] = data;
+
+                address += self.nametable_increment_value();
+                self.vram_write_addr[0] = (address & 0xFF) as u8;
+                self.vram_write_addr[1] = (address >> 8) as u8;
             },
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
         }
+    }
+
+    pub fn is_enable_nmi(&self) -> bool {
+        (self.control & CONTROL_MASK_ENABLE_NMI) != 0
+    }
+
+    pub fn is_raise_nmi(&mut self) -> bool {
+        let result = self.is_raise_nmi;
+        self.is_raise_nmi = false;
+        result
     }
 }

@@ -47,12 +47,13 @@ impl Mbc {
     }
 
     pub fn read16(&self, addr: u16) -> u16 {
-        (self.read(addr) as u16 | (self.read(addr+1) as u16) << 8) as u16
+        let low = self.read(addr) as u16;
+        let high = self.read(addr+1) as u16;
+        high << 8 | low
     }
 
-
     pub fn write(&mut self, addr: u16, value: u8) {
-        // println!("Mbc::write({:x},{:x})", addr, value);
+        println!("Mbc::write({:x},{:x})", addr, value);
         match addr {
             0x0000u16...0x1FFFu16 => {
                 let prev = self.ram[addr as usize];
@@ -69,5 +70,13 @@ impl Mbc {
             0x8000u16...0xFFFFu16 => panic!("cant write to ROM:{:x}", addr),
              _ => panic!("mbc write error:#{:x}", addr)
         };
+    }
+
+    pub fn is_enable_nmi(&self) -> bool {
+        self.ppu.borrow().is_enable_nmi()
+    }
+
+    pub fn is_raise_nmi(&self) -> bool {
+        self.ppu.borrow_mut().is_raise_nmi()
     }
 }
