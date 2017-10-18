@@ -106,6 +106,9 @@ impl Rom {
     pub fn prg_len(&self) -> u16 {
         self.prg.len() as u16
     }
+    pub fn chr(&self, addr: u16) -> u8 {
+        self.prg[addr as usize]
+    }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {
         let mut header: RomHeader = unsafe { mem::zeroed() };

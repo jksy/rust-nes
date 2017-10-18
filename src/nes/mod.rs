@@ -1,5 +1,6 @@
 extern crate timer;
 extern crate chrono;
+extern crate bmp;
 
 pub mod cpu;
 pub mod rom;

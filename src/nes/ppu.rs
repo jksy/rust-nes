@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 use nes::mapper::Mapper;
+use nes::bmp::Image;
 
 #[derive(Clone)]
 pub struct Ppu {
@@ -91,6 +92,16 @@ impl Ppu {
             let end = start + 32;
             let s = String::from_utf8_lossy(&self.vram[start..end]);
             println!("{:02}:{}", y, s);
+        }
+
+        // to bmp
+        let mut img = Image::new(256, 240);
+        let mapper = self.mapper.borrow();
+        for y in 0..30 {
+            for x in 0..32 {
+                let pat_index = self.vram[x + y*32];
+                let chr = mapper.chr_rom(pat_index as u16);
+            }
         }
     }
 
