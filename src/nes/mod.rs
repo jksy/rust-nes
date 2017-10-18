@@ -5,6 +5,7 @@ pub mod cpu;
 pub mod rom;
 pub mod mbc;
 pub mod ppu;
+pub mod joypad;
 pub mod mapper;
 
 use std::cell::RefCell;
@@ -12,6 +13,7 @@ use std::rc::Rc;
 use nes::cpu::Cpu;
 use nes::rom::Rom;
 use nes::mbc::Mbc;
+use nes::joypad::Joypad;
 use nes::ppu::Ppu;
 use nes::mapper::Mapper;
 use std::sync::mpsc::channel;
@@ -28,12 +30,18 @@ pub struct Nes {
     // tick: u32,
 }
 
+macro_rules !wrap_with_rc {
+    ($value: expr) => {
+        Rc::new(RefCell::new(Box::new($value)));
+    }
+}
+
 impl Nes {
     pub fn new() -> Self {
-        let mut mapper = Rc::new(RefCell::new(Box::new(Mapper::new())));
-        let mut ppu = Rc::new(RefCell::new(Box::new(Ppu::new(mapper.clone()))));
-        let mut mbc = Rc::new(RefCell::new(Box::new(Mbc::new(mapper.clone(), ppu.clone()))));
-        // let mut ref_mbc = Rc::new(RefCell::new(mbc));
+        let mut mapper = wrap_with_rc!(Mapper::new());
+        let mut ppu    = wrap_with_rc!(Ppu::new(mapper.clone()));
+        let mut joypad = wrap_with_rc!(Joypad::new());
+        let mut mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
         let mut cpu = Cpu::new(mbc.clone());
 
         Nes{

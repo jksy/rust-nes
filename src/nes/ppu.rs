@@ -1,5 +1,3 @@
-#![feature(generators, generator_traint)]
-
 use std::cell::RefCell;
 use std::rc::Rc;
 use nes::mapper::Mapper;
@@ -68,8 +66,8 @@ impl Ppu {
             tick:          0u64,
             current_line: 0,
             current_cycle: 0,
-            vram_write_addr:          vec![],
-            scroll_position:          vec![],
+            vram_write_addr:          vec![0,0],
+            scroll_position:          vec![0,0],
             is_raise_nmi   : false,
         }
     }
@@ -80,16 +78,14 @@ impl Ppu {
         self.tick = self.tick.overflowing_add(1).0;
         self.process_cycle();
 
-        println!("control:#{:02x}", self.control);
-
         if self.current_line == 0 && self.current_cycle == 0 {
             self.print_bg_name_table();
         }
     }
 
     fn print_bg_name_table(&self) {
-        println!("======== BG NAME TABLE =====");
         let addr = self.name_table_addr();
+        println!("======== BG NAME TABLE({:04x}) =====", addr);
         for y in 0..30 {
             let start = (addr + y * 32) as usize;
             let end = start + 32;
@@ -132,7 +128,7 @@ impl Ppu {
     }
 
     fn name_table_addr(&self) -> u16 {
-        match self.control &  CONTROL_MASK_NAME_TABLE_ADDR {
+        match self.control & CONTROL_MASK_NAME_TABLE_ADDR {
             0 => 0x2000u16,
             1 => 0x2400u16,
             2 => 0x2800u16,
@@ -164,7 +160,9 @@ impl Ppu {
         match addr {
             0x2000 => {
                 self.control = data;
-                self.vram_write_addr.truncate(0);
+                self.vram_write_addr.clear();
+                self.vram_write_addr.insert(0, 0);
+                self.vram_write_addr.insert(0, 0);
             },
             0x2001 => self.mask = data,
             // 0x2003 => self.oam_address = data,
@@ -172,10 +170,18 @@ impl Ppu {
             0x2005 => {
                 self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
+                println!("PPU scroll position:{:x},{:x}",
+                         self.scroll_position[0],
+                         self.scroll_position[1],
+                         );
             },
             0x2006 => {
                 self.vram_write_addr.insert(0, data);
                 self.vram_write_addr.truncate(2);
+                println!("PPU vram write addr:{:x},{:x}",
+                         self.vram_write_addr[0],
+                         self.vram_write_addr[1],
+                         );
             },
             0x2007 => {
                 let mut address = self.vram_write_addr[0] as u16;

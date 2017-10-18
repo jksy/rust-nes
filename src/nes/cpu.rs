@@ -52,7 +52,7 @@ macro_rules !cmp {
     ($self:ident, $target:expr, $value:expr) => {
         {
             let target = $target;
-            let value = $value as u8;
+            let value = $value;
             let (result, overflow) = target.overflowing_sub(value);
             $self.set_flag(FLAG_CRY, target < value);
             $self.set_flag(FLAG_ZER, result == 0);
@@ -250,7 +250,7 @@ impl Cpu {
 
     // subrouting
     fn jmp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        self.pc = addr.read16(self);
+        self.pc = addr.read16_addr(self);
         false
     }
     fn jsr<T:AddressingMode>(&mut self, addr: T) -> bool {
@@ -412,7 +412,9 @@ impl Cpu {
         true
     }
     fn cmp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        cmp!(self, self.a, addr.read(self));
+        let v = addr.read(self);
+        println!("self.a={:x}, addr.read={:x}", self.a, v);
+        cmp!(self, self.a, v);
         self.pc += addr.length();
         true
     }
@@ -976,8 +978,9 @@ impl Cpu {
 
     fn debug(&mut self) {
         let mut addr = 0x02u16;
-        let test_result = self.read16(addr);
-        println!("=====CPU(step:[{:07}],pc:[{:02x}]====", self.step, self.pc);
+        // let test_result = self.read16(addr);
+        let time = (self.step as f32 * 1.0 / 22_000_000.0);
+        println!("=====CPU(step:[{:07}({}s)],pc:[{:02x}]====", self.step, time,self.pc);
         print!("a:{:02x}", self.a);
         print!(" x:{:02x}", self.x);
         print!(" y:{:02x}", self.y);
@@ -993,7 +996,7 @@ impl Cpu {
                  (self.p & FLAG_OVF) != 0,
                  (self.p & FLAG_NEG) != 0,
                  );
-        println!("test_result:0x{:x}", test_result);
+        // println!("test_result:0x{:x}", test_result);
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -1076,10 +1079,10 @@ impl Cpu {
             let mbc = self.mbc.borrow_mut();
             let enable = mbc.is_enable_nmi();
             let raised = mbc.is_raise_nmi();
-            println!("enable_nmi:{}, raise_nmi:{}", raised, raised);
+            // println!("enable_nmi:{}, raise_nmi:{}", raised, raised);
             enable && raised
         };
-        println!("need_irq:{}", need_irq);
+        // println!("need_irq:{}", need_irq);
 
         if need_irq {
             println!("do_irq");

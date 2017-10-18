@@ -1,6 +1,7 @@
 use nes::rom::Rom;
 use nes::ppu::Ppu;
 use nes::mapper::Mapper;
+use nes::joypad::Joypad;
 use std::mem;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -11,14 +12,19 @@ pub struct Mbc {
     // vrom: &u8,
     ram: Box<[u8]>,
     ppu: Rc<RefCell<Box<Ppu>>>,
+    joypad: Rc<RefCell<Box<Joypad>>>,
     // sram: &u8,
     // vram: &u8,
 }
 
 impl Mbc {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>, ppu: Rc<RefCell<Box<Ppu>>>) -> Self {
+    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>,
+               ppu: Rc<RefCell<Box<Ppu>>>,
+               joypad: Rc<RefCell<Box<Joypad>>>,
+               ) -> Self {
         Mbc{mapper: mapper,
             ppu: ppu,
+            joypad: joypad,
             ram: Box::new([0u8; 0x2000])}
     }
 
@@ -31,7 +37,7 @@ impl Mbc {
         let x = match addr {
             0x0000u16...0x1FFFu16 => self.ram[addr as usize],
             0x2000u16...0x2007u16 => self.ppu.borrow().read(addr),
-            // 0x4000u16...0x5FFFu16 => self.io[],
+            0x4016u16...0x4017u16 => self.joypad.borrow().read(addr),
             0x6000u16...0x7FFFu16 => { // self.sram[],
                 0x00u8
             },
@@ -65,6 +71,9 @@ impl Mbc {
             },
             // 0x2000u16...0x3FFFu16 => self.io[], // dont use
             0x4000u16...0x401Fu16 => {}, // ignore(APU, etc)
+            0x4016u16...0x417Fu16 => {
+                self.joypad.borrow_mut().write(addr,value)
+            },
             // 0x4020u16...0x5FFFu16 => self.io[], // extend ram
             // 0x6000u16...0x7FFFu16 => self.sram[],
             0x8000u16...0xFFFFu16 => panic!("cant write to ROM:{:x}", addr),
