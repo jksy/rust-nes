@@ -28,6 +28,7 @@ fn main() {
     // init_sdl();
     let mut nes = Nes::new();
     let rom = Rom::load("nestest.nes").unwrap();
+    rom.print();
     nes.set_rom(rom.clone());
     nes.reset();
     nes.run();

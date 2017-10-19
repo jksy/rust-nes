@@ -2,6 +2,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use nes::mapper::Mapper;
 use nes::bmp::Image;
+use nes::bmp::Pixel;
+use std::fs::File;
+use std::io::prelude::*;
+use std::ops::Range;
 
 #[derive(Clone)]
 pub struct Ppu {
@@ -15,7 +19,12 @@ pub struct Ppu {
     vram_addr: u8,   // $2006(w*2)
     vram_data: u8,   // $2007(r/w)
     oam_dma: u8,     // $4014(w)
-    vram: Vec<u8>,   // 0x0000-0x1FFF:Pattern
+    vram: Vec<u8>,   // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
+                     // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
+                     // 0x2000-0x23FF:Name table1
+                     // 0x2400-0x27FF:Name table2
+                     // 0x2800-0x2BFF:Name table3
+                     // 0x2C00-0x2FFF:Name table4
                      // 0x3F00-0x3F1F:Pallete
     mapper: Rc<RefCell<Box<Mapper>>>,
     tick: u64,
@@ -84,7 +93,7 @@ impl Ppu {
         }
     }
 
-    fn print_bg_name_table(&self) {
+    fn print_bg_name_table<'a>(&self) {
         let addr = self.name_table_addr();
         println!("======== BG NAME TABLE({:04x}) =====", addr);
         for y in 0..30 {
@@ -97,12 +106,50 @@ impl Ppu {
         // to bmp
         let mut img = Image::new(256, 240);
         let mapper = self.mapper.borrow();
+        // let pal = [0x31u8, 0x21u8, 0x11u8, 0x01u8];
+        //
+        let pal = [[0xFFu8, 0xFFu8, 0xFFu8],
+                   [0x00u8, 0x00u8, 0xFFu8],
+                   [0x00u8, 0xFFu8, 0x00u8],
+                   [0xFFu8, 0x00u8, 0x00u8],
+                   [0x00u8, 0x00u8, 0x00u8],
+            ];
+
+
+        let mapper = self.mapper.borrow();
         for y in 0..30 {
             for x in 0..32 {
-                let pat_index = self.vram[x + y*32];
-                let chr = mapper.chr_rom(pat_index as u16);
+                let address = (0x2000 + x + y * 32) as usize;
+                println!("address:{:04x}", address);
+                let sprite_index = self.vram[address] as usize;
+                let head_addr = (0x0000 + sprite_index * 2 * 8) as usize;
+                let tail_addr = head_addr + 16;
+                let memory = &mapper.chr_rom()[head_addr..tail_addr];
+                let sprite = Sprite::new(memory);
+
+                // draw BG sprite
+                let base_x = x * 8;
+                let base_y = y * 8;
+                for pix_x in 0u32..8u32 {
+                    for pix_y in 0u32..8u32 {
+                        let index = sprite.pal_index(pix_x as u8, pix_y as u8) as usize;
+                        let x = base_x + pix_x;
+                        let y = base_y + pix_y;
+                        let pixel = Pixel::new(pal[index][0], pal[index][1], pal[index][2]);
+                        println!("set_pixel({:02x},{:02x},{:?})", x, y, pixel);
+                        img.set_pixel(x, y, pixel);
+                    }
+                }
             }
         }
+        img.save("bg.bmp");
+        self.dump_vram();
+        panic!();
+    }
+
+    fn dump_vram(&self) {
+        let mut file = File::create("vram.dmp").unwrap();
+        file.write_all(&self.vram);
     }
 
     fn process_cycle(&mut self) {
@@ -155,9 +202,6 @@ impl Ppu {
         }
     }
 
-    fn raise_nmi() {
-    }
-
     pub fn read(&self, addr: u16) -> u8 {
         match addr {
             0x2002 => self.status,
@@ -208,6 +252,19 @@ impl Ppu {
         }
     }
 
+    fn read_vram(&self, addr:u16) -> u8 {
+        match addr {
+            0x0000u16...0x1FFFu16 => {
+                let mapper = self.mapper.borrow();
+                mapper.chr_rom()[addr as usize]
+            },
+            _ => {
+                panic!();
+            },
+        }
+
+    }
+
     pub fn is_enable_nmi(&self) -> bool {
         (self.control & CONTROL_MASK_ENABLE_NMI) != 0
     }
@@ -218,3 +275,27 @@ impl Ppu {
         result
     }
 }
+
+pub struct Sprite<'a> {
+    low:  &'a [u8],
+    high: &'a [u8],
+}
+
+impl<'a> Sprite<'a> {
+    fn new(data: &'a [u8]) -> Self {
+        Sprite{low: &data[0..8], high: &data[8..16]}
+    }
+
+    pub fn pal_index(&self, x: u8, y: u8) -> u8 {
+        let low = self.low[y as usize] << x & 0x80;
+        let high = self.high[y as usize] << x & 0x80;
+        println!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
+                 x, y,
+                 self.low[y as usize],
+                 self.high[y as usize],
+                 low,
+                 high );
+        low >> 7 | high >> 6
+    }
+}
+

@@ -106,8 +106,13 @@ impl Rom {
     pub fn prg_len(&self) -> u16 {
         self.prg.len() as u16
     }
-    pub fn chr(&self, addr: u16) -> u8 {
-        self.prg[addr as usize]
+    pub fn chr(&self) -> &[u8] {
+        &self.chr
+    }
+
+    pub fn chr128(&self, addr: u16) -> &[u8] {
+        let a = addr as usize;
+        &self.chr[a..(a+16)]
     }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {

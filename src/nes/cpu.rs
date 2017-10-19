@@ -1093,7 +1093,6 @@ impl Cpu {
         }
     }
 
-
     pub fn reset(&mut self) {
         self.pc = self.vector("reset");
         println!("reset vector:{:x}", self.pc);

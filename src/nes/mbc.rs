@@ -5,6 +5,8 @@ use nes::joypad::Joypad;
 use std::mem;
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::fs::File;
+use std::io::prelude::*;
 
 #[derive(Clone)]
 pub struct Mbc {
@@ -87,5 +89,10 @@ impl Mbc {
 
     pub fn is_raise_nmi(&self) -> bool {
         self.ppu.borrow_mut().is_raise_nmi()
+    }
+
+    pub fn dump_ram(&self) {
+        let mut file = File::create("ram.dmp").unwrap();
+        file.write_all(&self.ram);
     }
 }
