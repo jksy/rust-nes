@@ -333,7 +333,7 @@ impl Cpu {
 
     fn do_irq(&mut self, irq_name: &str) {
         let pc = self.pc;
-        self.push16(pc - 1);
+        self.push16(pc);
         let p = self.p;
         self.push(p);
         self.set_flag(FLAG_IRQ, true);
