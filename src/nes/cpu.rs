@@ -324,9 +324,8 @@ impl Cpu {
     }
     fn rti<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:RTI");
-        let flag = (self.pop() & FLAG_IRQ) != 0;
-        self.set_flag(FLAG_IRQ, flag);
-        let return_addr = self.pop16() + 1;
+        self.p = self.pop();
+        let return_addr = self.pop16();
         println!("self.pc({:x}) => {:x}", self.pc, return_addr);
         self.pc = return_addr;
         false
@@ -476,8 +475,12 @@ impl Cpu {
     fn asl<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ASL");
         let carry = (self.a & 0x80) != 0;
+        let result = self.a << 1;
         self.set_flag(FLAG_CRY, carry);
-        self.a = self.a << 1;
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+
+        self.a = result;
         self.pc += addr.length();
         true
     }
@@ -585,7 +588,16 @@ impl Cpu {
     fn rol<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ROL");
         let data = addr.read(self);
-        let result = (data >> 7) | (data << 1);
+        let carry = (data & 0x80) == 0x80;
+        let mut result = data << 1;
+        if self.get_flag(FLAG_CRY) {
+            result |= 0x01;
+        }
+
+        self.set_flag(FLAG_CRY, carry);
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+
         addr.write(self, result);
         self.pc += addr.length();
         true
@@ -593,7 +605,16 @@ impl Cpu {
     fn ror<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ROR");
         let data = addr.read(self);
-        let result = (data << 7) | (data >> 1);
+        let carry = (data & 0x01) == 0x01;
+        let mut result = data >> 1;
+        if self.get_flag(FLAG_CRY) {
+            result |= 0x80;
+        }
+
+        self.set_flag(FLAG_CRY, carry);
+        self.set_negative_flag(result);
+        self.set_zero_flag(result);
+
         addr.write(self, result);
         self.pc += addr.length();
         true
@@ -614,8 +635,8 @@ impl Cpu {
         if !self.get_flag(FLAG_CRY) {
             result = result.wrapping_sub(1);
         }
-        // self.set_negative_flag(result as u8);
         self.set_zero_flag(result as u8);
+        self.set_negative_flag(result as u8);
         self.set_flag(FLAG_CRY, (result & 0x0100) == 0);
         self.set_flag(FLAG_OVF,
                       (target ^ value) & 0x80 != 0 &&
@@ -789,7 +810,7 @@ impl Cpu {
     fn indirecty(&mut self) -> MemoryAddressingMode {
         let arg = self.read(self.pc) as u16;
         // let addr = self.read16bug(arg) + self.y as u16;
-        let addr = self.read16(arg) + self.y as u16;
+        let addr = self.read16(arg).wrapping_add(self.y as u16);
         MemoryAddressingMode::new(addr, 1)
     }
 
