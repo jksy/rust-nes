@@ -119,10 +119,10 @@ impl Ppu {
         let mapper = self.mapper.borrow();
         for y in 0..30 {
             for x in 0..32 {
-                let address = (0x2000 + x + y * 32) as usize;
+                let address = (self.name_table_addr() + x + y * 32);
                 println!("address:{:04x}", address);
-                let sprite_index = self.vram[address] as usize;
-                let head_addr = (0x0000 + sprite_index * 2 * 8) as usize;
+                let sprite_index = self.vram[address as usize] as u16;
+                let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
                 let tail_addr = head_addr + 16;
                 let memory = &mapper.chr_rom()[head_addr..tail_addr];
                 let sprite = Sprite::new(memory);
@@ -130,21 +130,20 @@ impl Ppu {
                 // draw BG sprite
                 let base_x = x * 8;
                 let base_y = y * 8;
-                for pix_x in 0u32..8u32 {
-                    for pix_y in 0u32..8u32 {
+                for pix_x in 0..8 {
+                    for pix_y in 0..8 {
                         let index = sprite.pal_index(pix_x as u8, pix_y as u8) as usize;
+                        let pixel = Pixel::new(pal[index][0], pal[index][1], pal[index][2]);
                         let x = base_x + pix_x;
                         let y = base_y + pix_y;
-                        let pixel = Pixel::new(pal[index][0], pal[index][1], pal[index][2]);
                         println!("set_pixel({:02x},{:02x},{:?})", x, y, pixel);
-                        img.set_pixel(x, y, pixel);
+                        img.set_pixel(x as u32, y as u32, pixel);
                     }
                 }
             }
         }
         img.save("bg.bmp");
         self.dump_vram();
-        panic!();
     }
 
     fn dump_vram(&self) {
@@ -192,6 +191,22 @@ impl Ppu {
             2 => 0x2800u16,
             3 => 0x2C00u16,
             _ => {unreachable!()}
+        }
+    }
+
+    fn bg_addr(&self) -> u16 {
+        if (self.control & CONTROL_MASK_BG_ADDRESS) != 0 {
+            0x1000u16
+        } else {
+            0x0000u16
+        }
+    }
+
+    fn sprite_addr(&self) -> u16 {
+        if (self.control & CONTROL_MASK_SPRITE_ADDRESS) != 0 {
+            0x1000u16
+        } else {
+            0x0000u16
         }
     }
 

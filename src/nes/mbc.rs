@@ -34,10 +34,14 @@ impl Mbc {
         self.mapper.borrow_mut().set_rom(rom)
     }
 
+    pub fn initial_pc(&self) -> u16 {
+        self.mapper.borrow().initial_pc()
+    }
+
     pub fn read(&self, addr: u16) -> u8 {
-        print!("Mbc::read({:x})", addr);
+        print!("  Mbc::read({:x})", addr);
         let x = match addr {
-            0x0000u16...0x1FFFu16 => self.ram[addr as usize],
+            0x0000u16...0x1FFFu16 => self.ram[(addr & !0x0800) as usize],
             0x2000u16...0x2007u16 => self.ppu.borrow().read(addr),
             0x4016u16...0x4017u16 => self.joypad.borrow().read(addr),
             0x6000u16...0x7FFFu16 => { // self.sram[],
@@ -61,10 +65,10 @@ impl Mbc {
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
-        println!("Mbc::write({:x},{:x})", addr, value);
+        println!("  Mbc::write({:x},{:x})", addr, value);
         match addr {
             0x0000u16...0x1FFFu16 => {
-                let prev = self.ram[addr as usize];
+                let prev = self.ram[(addr & !0x0800)as usize];
                 // println!("({:x} -> {:x})", prev, *value);
                 self.ram[addr as usize] = value
             },

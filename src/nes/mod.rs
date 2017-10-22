@@ -84,7 +84,9 @@ impl Nes {
 
     pub fn set_rom(&mut self, rom: Box<rom::Rom>) {
         self.mbc.borrow_mut().set_rom(rom);
+        self.cpu.setup();
     }
+
 
     pub fn reset(&mut self) {
         self.cpu.reset();

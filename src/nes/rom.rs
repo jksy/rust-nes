@@ -27,7 +27,7 @@ impl RomHeader {
         self.magic_number[3] == 0x1a    // EOF(DOS)
     }
 
-    fn mapper(&self) -> u16 {
+    fn mapper_no(&self) -> u16 {
         let lower = (self.flags6 & 0xF0) as u16;
         let upper = (self.flags7 & 0xF0) as u16;
         lower | upper << 4
@@ -49,15 +49,18 @@ pub struct Rom {
     chr: Bytes,
 }
 
+const PRG_BLOCK_SIZE: usize = 16 * 1024;
+const CHR_BLOCK_SIZE: usize = 16 * 1024;
+
 impl Rom {
     pub fn load(filename: &str) -> Result<(Box<Rom>), std::io::Error> {
         let mut file = File::open(filename)?;
         let header = Rom::load_header(&mut file)?;
 
-        let mut prg = BytesMut::with_capacity(16 * 1024 * header.prg_page_count as usize);
+        let mut prg = BytesMut::with_capacity(PRG_BLOCK_SIZE * header.prg_page_count as usize);
         Rom::read_file(&mut file, &mut prg, 16 * header.prg_page_count as usize)?;
 
-        let mut chr = BytesMut::with_capacity(8 * 1024 * header.chr_page_count as usize);
+        let mut chr = BytesMut::with_capacity(CHR_BLOCK_SIZE * header.chr_page_count as usize);
         Rom::read_file(&mut file, &mut chr, 8 * header.chr_page_count as usize)?;
 
         let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
@@ -84,7 +87,7 @@ impl Rom {
         println!("validate_magic_number:{}", self.header.validate_magic_number());
         println!("prg_page_count:{}", self.header.prg_page_count);
         println!("chr_page_count:{}", self.header.chr_page_count);
-        println!("mapper:{}", self.header.mapper());
+        println!("mapper_no:{}", self.header.mapper_no());
         println!("flags6:{}", self.header.flags6);
         println!("PRG Len:{}", self.prg.len());
         println!("CHR Len:{}", self.chr.len());
@@ -113,6 +116,22 @@ impl Rom {
     pub fn chr128(&self, addr: u16) -> &[u8] {
         let a = addr as usize;
         &self.chr[a..(a+16)]
+    }
+
+    pub fn initial_pc(&self) -> u16 {
+        let mut pc = 0x8000;
+        let header = &self.header;
+        if header.prg_page_count == 2 {
+            let head = &self.prg[0..PRG_BLOCK_SIZE];
+            let tail = &self.prg[PRG_BLOCK_SIZE..(PRG_BLOCK_SIZE*2)];
+            if header.mapper_no() == 0 && head == tail {
+                pc = 0xc000
+            }
+        } else if header.prg_page_count == 1 {
+            pc = 0xc000
+        }
+
+        pc
     }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {

@@ -20,5 +20,9 @@ impl Mapper {
     pub fn chr_rom(&self) -> &[u8] {
         self.rom.chr()
     }
+
+    pub fn initial_pc(&self) -> u16 {
+        self.rom.initial_pc()
+    }
 }
 
