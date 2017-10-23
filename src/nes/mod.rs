@@ -2,17 +2,17 @@ extern crate timer;
 extern crate chrono;
 extern crate bmp;
 
-pub mod cpu;
+mod cpu;
 pub mod rom;
-pub mod mbc;
-pub mod ppu;
-pub mod joypad;
-pub mod mapper;
+mod mbc;
+mod ppu;
+mod joypad;
+mod mapper;
+mod addressing_mode;
 
 use std::cell::RefCell;
 use std::rc::Rc;
 use nes::cpu::Cpu;
-use nes::rom::Rom;
 use nes::mbc::Mbc;
 use nes::joypad::Joypad;
 use nes::ppu::Ppu;
@@ -21,13 +21,11 @@ use std::sync::mpsc::channel;
 use std::thread;
 use std::time;
 
-type RefMapper = Rc<RefCell<Box<Mapper>>>;
-
 pub struct Nes {
     cpu: Cpu,
     mbc: Rc<RefCell<Box<Mbc>>>,
     ppu: Rc<RefCell<Box<Ppu>>>,
-    mapper: Rc<RefCell<Box<Mapper>>>,
+    // mapper: Rc<RefCell<Box<Mapper>>>,
     // tick: u32,
 }
 
@@ -39,17 +37,17 @@ macro_rules !wrap_with_rc {
 
 impl Nes {
     pub fn new() -> Self {
-        let mut mapper = wrap_with_rc!(Mapper::new());
-        let mut ppu    = wrap_with_rc!(Ppu::new(mapper.clone()));
-        let mut joypad = wrap_with_rc!(Joypad::new());
-        let mut mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
-        let mut cpu = Cpu::new(mbc.clone());
+        let mapper = wrap_with_rc!(Mapper::new());
+        let ppu    = wrap_with_rc!(Ppu::new(mapper.clone()));
+        let joypad = wrap_with_rc!(Joypad::new());
+        let mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+        let cpu = Cpu::new(mbc.clone());
 
         Nes{
             cpu: cpu,
             mbc: mbc,
             ppu: ppu,
-            mapper: mapper,
+            // mapper: mapper,
         }
     }
 
@@ -61,12 +59,12 @@ impl Nes {
             move || {
                 loop {
                     thread::sleep(time::Duration::new(0, 50));
-                    let x = sender.send(0).unwrap();
+                    let _ = sender.send(0).unwrap();
                 }
             });
 
         loop {
-            let r = receiver.recv().unwrap();
+            let _ = receiver.recv().unwrap();
             self.tick();
         }
     }

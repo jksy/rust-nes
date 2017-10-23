@@ -1,8 +1,7 @@
 use nes::mbc::Mbc;
 use std::cell::RefCell;
 use std::rc::Rc;
-use std::fmt::{Formatter, Error};
-
+use nes::addressing_mode::*;
 
 #[derive(Clone)]
 pub struct Cpu {
@@ -25,34 +24,6 @@ const FLAG_BRK:u8 = 0x10; // break command flag
 const FLAG_RSV:u8 = 0x20; // reserved (always 1)
 const FLAG_OVF:u8 = 0x40; // over flow flag
 const FLAG_NEG:u8 = 0x80; // negative flag
-
-macro_rules !sub {
-    ($self:ident, $target:expr, $value:expr) => {
-        {
-            let (r, overflow) = ($target).overflowing_sub($value);
-            $self.set_flag(FLAG_OVF, overflow);
-            $self.set_flag(FLAG_ZER, r == 0);
-            $target = r;
-        }
-
-    }
-}
-
-macro_rules !add {
-    ($self:ident, $target:expr, $value:expr) => {
-        {
-            let target = $target as u16;
-            let value = $value as u16;
-            let result = target + value;
-
-            $self.set_flag(FLAG_CRY, (result & 0x0100) == 0x0100);
-            $self.set_negative_flag(result as u8);
-            $self.set_zero_flag(result as u8);
-            $target = result as u8;
-        }
-
-    }
-}
 
 macro_rules !inc {
     ($self:ident, $target:expr) => {
@@ -88,7 +59,7 @@ macro_rules !cmp {
         {
             let target = $target;
             let value = $value;
-            let (result, overflow) = target.overflowing_sub(value);
+            let (result, _) = target.overflowing_sub(value);
             $self.set_flag(FLAG_CRY, target >= value);
             $self.set_zero_flag(result);
             $self.set_negative_flag(result);
@@ -114,98 +85,9 @@ macro_rules !branch {
     }
 }
 
-trait AddressingMode {
-    fn read(&self, cpu: &mut Cpu) -> u8 { unimplemented!(); 0u8 }
-    fn write(&self, cpu: &mut Cpu, data: u8) { unimplemented!() }
-    fn read16(&self, cpu: &mut Cpu) -> u16 { unimplemented!(); 0u16 }
-    fn read16_addr(&self, cpu: &mut Cpu) -> u16 { unimplemented!(); 0u16 }
-
-    fn length(&self) -> u16 { unimplemented!(); 0u16 }
-}
-
-struct NoAccessAddressingMode {}
-impl AddressingMode for NoAccessAddressingMode {
-    fn length(&self) -> u16 { 0u16 }
-}
-
-struct MemoryAddressingMode {
-    addr: u16,
-    size: u16,
-}
-
-impl MemoryAddressingMode {
-    fn new(addr: u16, size: u16) -> Self {
-        MemoryAddressingMode{addr: addr, size: size}
-    }
-}
-
-impl AddressingMode for MemoryAddressingMode {
-    fn read(&self, cpu: &mut Cpu) -> u8 {
-        cpu.mbc.borrow_mut().read(self.addr)
-    }
-    fn read16(&self, cpu: &mut Cpu) -> u16 {
-        let mbc = cpu.mbc.borrow_mut();
-        let low = mbc.read(self.addr) as u16;
-        let high = mbc.read(self.addr+1) as u16;
-        high << 8 | low
-    }
-    fn read16_addr(&self, cpu: &mut Cpu) -> u16 {
-        self.addr
-    }
-    fn write(&self, cpu: &mut Cpu, data: u8) {
-        cpu.mbc.borrow_mut().write(self.addr, data)
-    }
-    fn length(&self) -> u16 {self.size}
-}
-
-struct ImmediateAddressingMode {
-    value: u8,
-    size: u16,
-}
-
-impl ImmediateAddressingMode {
-    fn new(value: u8, size: u16) -> Self {
-        ImmediateAddressingMode{value: value, size: size}
-    }
-}
-
-impl AddressingMode for ImmediateAddressingMode {
-    fn read(&self, cpu: &mut Cpu) -> u8 {
-        self.value
-    }
-    fn read16(&self, cpu: &mut Cpu) -> u16 {
-        unimplemented!(); 0u16;
-    }
-    fn write(&self, cpu: &mut Cpu, data: u8) {
-        unimplemented!(); 0u16;
-    }
-    fn length(&self) -> u16 {self.size}
-}
-
-struct AccumuratorAddressingMode {
-    size: u16,
-}
-
-impl AccumuratorAddressingMode {
-    fn new() -> Self {
-        AccumuratorAddressingMode{size: 0}
-    }
-}
-
-impl AddressingMode for AccumuratorAddressingMode {
-    fn read(&self, cpu: &mut Cpu) -> u8 {
-        cpu.a
-    }
-    fn write(&self, cpu: &mut Cpu, data: u8) {
-        cpu.a = data
-    }
-
-    fn length(&self) -> u16 {self.size}
-}
 
 impl Cpu {
     pub fn new(mbc: Rc<RefCell<Box<Mbc>>>) -> Self {
-        let initial_pc = mbc.borrow().initial_pc();
         Cpu {
             a: 0, x: 0, y: 0,
             pc: 0x8000, s: 0xFF, p: 0,
@@ -236,16 +118,14 @@ impl Cpu {
 
     fn kil<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:KIL");
-        unimplemented!();
         self.pc += addr.length();
-        true
+        unimplemented!();
     }
 
     fn slo<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:SLO");
-        unimplemented!();
         self.pc += addr.length();
-        true
+        unimplemented!();
     }
     fn nop<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:NOP");
@@ -254,9 +134,8 @@ impl Cpu {
     }
     fn anc<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ANC");
-        unimplemented!();
         self.pc += addr.length();
-        true
+        unimplemented!();
     }
     fn clc<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:CLC");
@@ -708,82 +587,66 @@ impl Cpu {
     fn rla<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:RLA");
         unimplemented!();
-        true
     }
     fn rra<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:RRA");
         unimplemented!();
-        true
     }
     fn alr<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ALR");
         unimplemented!();
-        true
     }
     fn arr<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ARR");
         unimplemented!();
-        true
     }
     fn sax<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:SAX");
         unimplemented!();
-        true
     }
     fn say<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:SAY");
         unimplemented!();
-        true
     }
     fn xaa<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:XAA");
         unimplemented!();
-        true
     }
     fn ahx<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:AHX");
         unimplemented!();
-        true
     }
     fn tas<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:TAS");
         unimplemented!();
-        true
     }
     fn shx<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:SHX");
         unimplemented!();
-        true
     }
     fn shy<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:SHY");
         unimplemented!();
-        true
     }
     fn lax<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:LAX");
         unimplemented!();
-        true
     }
     fn las<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:LAS");
         unimplemented!();
-        true
     }
     fn dcp<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:DCP");
         unimplemented!();
-        true
     }
     fn axs<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:AXS");
         unimplemented!();
-        true
     }
     fn isc<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ISC");
         unimplemented!();
-        true
     }
 
     // addressing mode
@@ -839,12 +702,12 @@ impl Cpu {
     }
 
     fn absolutex(&mut self) -> MemoryAddressingMode {
-        let (addr, overflow) = self.read16(self.pc).overflowing_add(self.x as u16);
+        let addr = self.read16(self.pc).wrapping_add(self.x as u16);
         MemoryAddressingMode::new(addr, 2)
     }
 
     fn absolutey(&mut self) -> MemoryAddressingMode {
-        let (addr, overflow) = self.read16(self.pc).overflowing_add(self.y as u16);
+        let addr = self.read16(self.pc).wrapping_add(self.y as u16);
         MemoryAddressingMode::new(addr, 2)
     }
 
@@ -865,262 +728,262 @@ impl Cpu {
         self.pc += 1;
 
         let cont = match opcode {
-            0x00 => {let mut m = self.implicit();    self.brk(m) },
-            0x01 => {let mut m = self.indirectx();   self.ora(m) },
-            0x02 => {let mut m = self.immediate();   self.kil(m) },
-            0x03 => {let mut m = self.indirectx();   self.slo(m) },
-            0x04 => {let mut m = self.zeropage();    self.nop(m) },
-            0x05 => {let mut m = self.zeropage();    self.ora(m) },
-            0x06 => {let mut m = self.zeropage();    self.asl(m) },
-            0x07 => {let mut m = self.zeropage();    self.slo(m) },
-            0x08 => {let mut m = self.implicit();    self.php(m) },
-            0x09 => {let mut m = self.immediate();   self.ora(m) },
-            0x0A => {let mut m = self.accumurator(); self.asl(m) },
-            0x0B => {let mut m = self.immediate();   self.anc(m) },
-            0x0C => {let mut m = self.absolute();    self.nop(m) },
-            0x0D => {let mut m = self.absolute();    self.ora(m) },
-            0x0E => {let mut m = self.absolute();    self.asl(m) },
-            0x0F => {let mut m = self.absolute();    self.slo(m) },
-            0x10 => {let mut m = self.immediate();   self.bpl(m) },
-            0x11 => {let mut m = self.indirecty();   self.ora(m) },
-            0x12 => {let mut m = self.immediate();   self.kil(m) },
-            0x13 => {let mut m = self.indirecty();   self.slo(m) },
-            0x14 => {let mut m = self.zeropagex();   self.nop(m) },
-            0x15 => {let mut m = self.zeropagex();   self.ora(m) },
-            0x16 => {let mut m = self.zeropagex();   self.asl(m) },
-            0x17 => {let mut m = self.zeropagex();   self.slo(m) },
-            0x18 => {let mut m = self.implicit();    self.clc(m) },
-            0x19 => {let mut m = self.absolutey();   self.ora(m) },
-            0x1A => {let mut m = self.immediate();   self.nop(m) },
-            0x1B => {let mut m = self.absolutey();   self.slo(m) },
-            0x1C => {let mut m = self.absolutex();   self.nop(m) },
-            0x1D => {let mut m = self.absolutex();   self.ora(m) },
-            0x1E => {let mut m = self.absolutex();   self.asl(m) },
-            0x1F => {let mut m = self.absolutex();   self.slo(m) },
-            0x20 => {let mut m = self.absolute();    self.jsr(m) },
-            0x21 => {let mut m = self.indirectx();   self.and(m) },
-            0x22 => {let mut m = self.immediate();   self.kil(m) },
-            0x23 => {let mut m = self.indirectx();   self.rla(m) },
-            0x24 => {let mut m = self.zeropage();    self.bit(m) },
-            0x25 => {let mut m = self.zeropage();    self.and(m) },
-            0x26 => {let mut m = self.zeropage();    self.rol(m) },
-            0x27 => {let mut m = self.zeropage();    self.rla(m) },
-            0x28 => {let mut m = self.implicit();    self.plp(m) },
-            0x29 => {let mut m = self.immediate();   self.and(m) },
-            0x2A => {let mut m = self.accumurator(); self.rol(m) },
-            0x2B => {let mut m = self.immediate();   self.anc(m) },
-            0x2C => {let mut m = self.absolute();    self.bit(m) },
-            0x2D => {let mut m = self.absolute();    self.and(m) },
-            0x2E => {let mut m = self.absolute();    self.rol(m) },
-            0x2F => {let mut m = self.absolute();    self.rla(m) },
-            0x30 => {let mut m = self.immediate();   self.bmi(m) },
-            0x31 => {let mut m = self.indirecty();   self.and(m) },
-            0x32 => {let mut m = self.immediate();   self.kil(m) },
-            0x33 => {let mut m = self.indirecty();   self.rla(m) },
-            0x34 => {let mut m = self.zeropagex();   self.nop(m) },
-            0x35 => {let mut m = self.zeropagex();   self.and(m) },
-            0x36 => {let mut m = self.zeropagex();   self.rol(m) },
-            0x37 => {let mut m = self.zeropagex();   self.rla(m) },
-            0x38 => {let mut m = self.implicit();    self.sec(m) },
-            0x39 => {let mut m = self.absolutey();   self.and(m) },
-            0x3A => {let mut m = self.immediate();   self.nop(m) },
-            0x3B => {let mut m = self.absolutey();   self.rla(m) },
-            0x3C => {let mut m = self.absolutex();   self.nop(m) },
-            0x3D => {let mut m = self.absolutex();   self.and(m) },
-            0x3E => {let mut m = self.absolutex();   self.rol(m) },
-            0x3F => {let mut m = self.absolutex();   self.rla(m) },
-            0x40 => {let mut m = self.implicit();    self.rti(m) },
-            0x41 => {let mut m = self.indirectx();   self.eor(m) },
-            0x42 => {let mut m = self.immediate();   self.kil(m) },
-            0x43 => {let mut m = self.indirectx();   self.sre(m) },
-            0x44 => {let mut m = self.zeropage();    self.nop(m) },
-            0x45 => {let mut m = self.zeropage();    self.eor(m) },
-            0x46 => {let mut m = self.zeropage();    self.lsr(m) },
-            0x47 => {let mut m = self.zeropage();    self.sre(m) },
-            0x48 => {let mut m = self.implicit();    self.pha(m) },
-            0x49 => {let mut m = self.immediate();   self.eor(m) },
-            0x4A => {let mut m = self.accumurator(); self.lsr(m) },
-            0x4B => {let mut m = self.immediate();   self.alr(m) },
-            0x4C => {let mut m = self.absolute();    self.jmp(m) },
-            0x4D => {let mut m = self.absolute();    self.eor(m) },
-            0x4E => {let mut m = self.absolute();    self.lsr(m) },
-            0x4F => {let mut m = self.absolute();    self.sre(m) },
-            0x50 => {let mut m = self.immediate();   self.bvc(m) },
-            0x51 => {let mut m = self.indirecty();   self.eor(m) },
-            0x52 => {let mut m = self.immediate();   self.kil(m) },
-            0x53 => {let mut m = self.indirecty();   self.sre(m) },
-            0x54 => {let mut m = self.zeropagex();   self.nop(m) },
-            0x55 => {let mut m = self.zeropagex();   self.eor(m) },
-            0x56 => {let mut m = self.zeropagex();   self.lsr(m) },
-            0x57 => {let mut m = self.zeropagex();   self.sre(m) },
-            0x58 => {let mut m = self.implicit();    self.cli(m) },
-            0x59 => {let mut m = self.absolutey();   self.eor(m) },
-            0x5A => {let mut m = self.immediate();   self.nop(m) },
-            0x5B => {let mut m = self.absolutey();   self.sre(m) },
-            0x5C => {let mut m = self.absolutex();   self.nop(m) },
-            0x5D => {let mut m = self.absolutex();   self.eor(m) },
-            0x5E => {let mut m = self.absolutex();   self.lsr(m) },
-            0x5F => {let mut m = self.absolutex();   self.sre(m) },
-            0x60 => {let mut m = self.implicit();    self.rts(m) },
-            0x61 => {let mut m = self.indirectx();   self.adc(m) },
-            0x62 => {let mut m = self.immediate();   self.kil(m) },
-            0x63 => {let mut m = self.indirectx();   self.rra(m) },
-            0x64 => {let mut m = self.zeropage();    self.nop(m) },
-            0x65 => {let mut m = self.zeropage();    self.adc(m) },
-            0x66 => {let mut m = self.zeropage();    self.ror(m) },
-            0x67 => {let mut m = self.zeropage();    self.rra(m) },
-            0x68 => {let mut m = self.implicit();    self.pla(m) },
-            0x69 => {let mut m = self.immediate();   self.adc(m) },
-            0x6A => {let mut m = self.accumurator(); self.ror(m) },
-            0x6B => {let mut m = self.immediate();   self.arr(m) },
-            0x6C => {let mut m = self.indirect();    self.jmp(m) },
-            0x6D => {let mut m = self.absolute();    self.adc(m) },
-            0x6E => {let mut m = self.absolute();    self.ror(m) },
-            0x6F => {let mut m = self.absolute();    self.rra(m) },
-            0x70 => {let mut m = self.immediate();   self.bvs(m) },
-            0x71 => {let mut m = self.indirecty();   self.adc(m) },
-            0x72 => {let mut m = self.immediate();   self.kil(m) },
-            0x73 => {let mut m = self.indirecty();   self.rra(m) },
-            0x74 => {let mut m = self.zeropagex();   self.nop(m) },
-            0x75 => {let mut m = self.zeropagex();   self.adc(m) },
-            0x76 => {let mut m = self.zeropagex();   self.ror(m) },
-            0x77 => {let mut m = self.zeropagex();   self.rra(m) },
-            0x78 => {let mut m = self.implicit();    self.sei(m) },
-            0x79 => {let mut m = self.absolutey();   self.adc(m) },
-            0x7A => {let mut m = self.immediate();   self.nop(m) },
-            0x7B => {let mut m = self.absolutey();   self.rra(m) },
-            0x7C => {let mut m = self.absolutex();   self.nop(m) },
-            0x7D => {let mut m = self.absolutex();   self.adc(m) },
-            0x7E => {let mut m = self.absolutex();   self.ror(m) },
-            0x7F => {let mut m = self.absolutex();   self.rra(m) },
-            0x80 => {let mut m = self.immediate();   self.nop(m) },
-            0x81 => {let mut m = self.indirectx();   self.sta(m) },
-            0x82 => {let mut m = self.immediate();   self.nop(m) },
-            0x83 => {let mut m = self.indirectx();   self.sax(m) },
-            0x84 => {let mut m = self.zeropage();    self.sty(m) },
-            0x85 => {let mut m = self.zeropage();    self.sta(m) },
-            0x86 => {let mut m = self.zeropage();    self.stx(m) },
-            0x87 => {let mut m = self.zeropage();    self.sax(m) },
-            0x88 => {let mut m = self.implicit();    self.dey(m) },
-            0x89 => {let mut m = self.immediate();   self.nop(m) },
-            0x8A => {let mut m = self.implicit();    self.txa(m) },
-            0x8B => {let mut m = self.immediate();   self.xaa(m) },
-            0x8C => {let mut m = self.absolute();    self.sty(m) },
-            0x8D => {let mut m = self.absolute();    self.sta(m) },
-            0x8E => {let mut m = self.absolute();    self.stx(m) },
-            0x8F => {let mut m = self.absolute();    self.sax(m) },
-            0x90 => {let mut m = self.immediate();   self.bcc(m) },
-            0x91 => {let mut m = self.indirecty();   self.sta(m) },
-            0x92 => {let mut m = self.immediate();   self.kil(m) },
-            0x93 => {let mut m = self.indirecty();   self.ahx(m) },
-            0x94 => {let mut m = self.zeropagex();   self.sty(m) },
-            0x95 => {let mut m = self.zeropagex();   self.sta(m) },
-            0x96 => {let mut m = self.zeropagey();   self.stx(m) },
-            0x97 => {let mut m = self.zeropagey();   self.sax(m) },
-            0x98 => {let mut m = self.implicit();    self.tya(m) },
-            0x99 => {let mut m = self.absolutey();   self.sta(m) },
-            0x9A => {let mut m = self.implicit();    self.txs(m) },
-            0x9B => {let mut m = self.immediate();   self.tas(m) },
-            0x9C => {let mut m = self.absolutex();   self.shy(m) },
-            0x9D => {let mut m = self.absolutex();   self.sta(m) },
-            0x9E => {let mut m = self.absolutey();   self.shx(m) },
-            0x9F => {let mut m = self.absolutey();   self.ahx(m) },
-            0xA0 => {let mut m = self.immediate();   self.ldy(m) },
-            0xA1 => {let mut m = self.indirectx();   self.lda(m) },
-            0xA2 => {let mut m = self.immediate();   self.ldx(m) },
-            0xA3 => {let mut m = self.indirectx();   self.lax(m) },
-            0xA4 => {let mut m = self.zeropage();    self.ldy(m) },
-            0xA5 => {let mut m = self.zeropage();    self.lda(m) },
-            0xA6 => {let mut m = self.zeropage();    self.ldx(m) },
-            0xA7 => {let mut m = self.zeropage();    self.lax(m) },
-            0xA8 => {let mut m = self.implicit();    self.tay(m) },
-            0xA9 => {let mut m = self.immediate();   self.lda(m) },
-            0xAA => {let mut m = self.implicit();    self.tax(m) },
-            0xAB => {let mut m = self.immediate();   self.lax(m) },
-            0xAC => {let mut m = self.absolute();    self.ldy(m) },
-            0xAD => {let mut m = self.absolute();    self.lda(m) },
-            0xAE => {let mut m = self.absolute();    self.ldx(m) },
-            0xAF => {let mut m = self.absolute();    self.lax(m) },
-            0xB0 => {let mut m = self.immediate();   self.bcs(m) },
-            0xB1 => {let mut m = self.indirecty();   self.lda(m) },
-            0xB2 => {let mut m = self.immediate();   self.kil(m) },
-            0xB3 => {let mut m = self.indirecty();   self.lax(m) },
-            0xB4 => {let mut m = self.zeropagex();   self.ldy(m) },
-            0xB5 => {let mut m = self.zeropagex();   self.lda(m) },
-            0xB6 => {let mut m = self.zeropagey();   self.ldx(m) },
-            0xB7 => {let mut m = self.zeropagey();   self.lax(m) },
-            0xB8 => {let mut m = self.implicit();    self.clv(m) },
-            0xB9 => {let mut m = self.absolutey();   self.lda(m) },
-            0xBA => {let mut m = self.implicit();    self.tsx(m) },
-            0xBB => {let mut m = self.absolutey();   self.las(m) },
-            0xBC => {let mut m = self.absolutex();   self.ldy(m) },
-            0xBD => {let mut m = self.absolutex();   self.lda(m) },
-            0xBE => {let mut m = self.absolutey();   self.ldx(m) },
-            0xBF => {let mut m = self.absolutey();   self.lax(m) },
-            0xC0 => {let mut m = self.immediate();   self.cpy(m) },
-            0xC1 => {let mut m = self.indirectx();   self.cmp(m) },
-            0xC2 => {let mut m = self.immediate();   self.nop(m) },
-            0xC3 => {let mut m = self.indirectx();   self.dcp(m) },
-            0xC4 => {let mut m = self.zeropage();    self.cpy(m) },
-            0xC5 => {let mut m = self.zeropage();    self.cmp(m) },
-            0xC6 => {let mut m = self.zeropage();    self.dec(m) },
-            0xC7 => {let mut m = self.zeropage();    self.dcp(m) },
-            0xC8 => {let mut m = self.implicit();    self.iny(m) },
-            0xC9 => {let mut m = self.immediate();   self.cmp(m) },
-            0xCA => {let mut m = self.implicit();    self.dex(m) },
-            0xCB => {let mut m = self.immediate();   self.axs(m) },
-            0xCC => {let mut m = self.absolute();    self.cpy(m) },
-            0xCD => {let mut m = self.absolute();    self.cmp(m) },
-            0xCE => {let mut m = self.absolute();    self.dec(m) },
-            0xCF => {let mut m = self.absolute();    self.dcp(m) },
-            0xD0 => {let mut m = self.immediate();   self.bne(m) },
-            0xD1 => {let mut m = self.indirecty();   self.cmp(m) },
-            0xD2 => {let mut m = self.immediate();   self.kil(m) },
-            0xD3 => {let mut m = self.indirecty();   self.dcp(m) },
-            0xD4 => {let mut m = self.zeropagex();   self.nop(m) },
-            0xD5 => {let mut m = self.zeropagex();   self.cmp(m) },
-            0xD6 => {let mut m = self.zeropagex();   self.dec(m) },
-            0xD7 => {let mut m = self.zeropagex();   self.dcp(m) },
-            0xD8 => {let mut m = self.implicit();    self.cld(m) },
-            0xD9 => {let mut m = self.absolutey();   self.cmp(m) },
-            0xDA => {let mut m = self.immediate();   self.nop(m) },
-            0xDB => {let mut m = self.absolutey();   self.dcp(m) },
-            0xDC => {let mut m = self.absolutex();   self.nop(m) },
-            0xDD => {let mut m = self.absolutex();   self.cmp(m) },
-            0xDE => {let mut m = self.absolutex();   self.dec(m) },
-            0xDF => {let mut m = self.absolutex();   self.dcp(m) },
-            0xE0 => {let mut m = self.immediate();   self.cpx(m) },
-            0xE1 => {let mut m = self.indirectx();   self.sbc(m) },
-            0xE2 => {let mut m = self.immediate();   self.nop(m) },
-            0xE3 => {let mut m = self.indirectx();   self.isc(m) },
-            0xE4 => {let mut m = self.zeropage();    self.cpx(m) },
-            0xE5 => {let mut m = self.zeropage();    self.sbc(m) },
-            0xE6 => {let mut m = self.zeropage();    self.inc(m) },
-            0xE7 => {let mut m = self.zeropage();    self.isc(m) },
-            0xE8 => {let mut m = self.implicit();    self.inx(m) },
-            0xE9 => {let mut m = self.immediate();   self.sbc(m) },
-            0xEA => {let mut m = self.implicit();    self.nop(m) },
-            0xEB => {let mut m = self.immediate();   self.sbc(m) },
-            0xEC => {let mut m = self.absolute();    self.cpx(m) },
-            0xED => {let mut m = self.absolute();    self.sbc(m) },
-            0xEE => {let mut m = self.absolute();    self.inc(m) },
-            0xEF => {let mut m = self.absolute();    self.isc(m) },
-            0xF0 => {let mut m = self.immediate();   self.beq(m) },
-            0xF1 => {let mut m = self.indirecty();   self.sbc(m) },
-            0xF2 => {let mut m = self.immediate();   self.kil(m) },
-            0xF3 => {let mut m = self.indirecty();   self.isc(m) },
-            0xF4 => {let mut m = self.zeropagex();   self.nop(m) },
-            0xF5 => {let mut m = self.zeropagex();   self.sbc(m) },
-            0xF6 => {let mut m = self.zeropagex();   self.inc(m) },
-            0xF7 => {let mut m = self.zeropagex();   self.isc(m) },
-            0xF8 => {let mut m = self.implicit();    self.sed(m) },
-            0xF9 => {let mut m = self.absolutey();   self.sbc(m) },
-            0xFA => {let mut m = self.immediate();   self.nop(m) },
-            0xFB => {let mut m = self.absolutey();   self.isc(m) },
-            0xFC => {let mut m = self.absolutex();   self.nop(m) },
-            0xFD => {let mut m = self.absolutex();   self.sbc(m) },
-            0xFE => {let mut m = self.absolutex();   self.inc(m) },
-            0xFF => {let mut m = self.absolutex();   self.isc(m) },
+            0x00 => {let m = self.implicit();    self.brk(m) },
+            0x01 => {let m = self.indirectx();   self.ora(m) },
+            0x02 => {let m = self.immediate();   self.kil(m) },
+            0x03 => {let m = self.indirectx();   self.slo(m) },
+            0x04 => {let m = self.zeropage();    self.nop(m) },
+            0x05 => {let m = self.zeropage();    self.ora(m) },
+            0x06 => {let m = self.zeropage();    self.asl(m) },
+            0x07 => {let m = self.zeropage();    self.slo(m) },
+            0x08 => {let m = self.implicit();    self.php(m) },
+            0x09 => {let m = self.immediate();   self.ora(m) },
+            0x0A => {let m = self.accumurator(); self.asl(m) },
+            0x0B => {let m = self.immediate();   self.anc(m) },
+            0x0C => {let m = self.absolute();    self.nop(m) },
+            0x0D => {let m = self.absolute();    self.ora(m) },
+            0x0E => {let m = self.absolute();    self.asl(m) },
+            0x0F => {let m = self.absolute();    self.slo(m) },
+            0x10 => {let m = self.immediate();   self.bpl(m) },
+            0x11 => {let m = self.indirecty();   self.ora(m) },
+            0x12 => {let m = self.immediate();   self.kil(m) },
+            0x13 => {let m = self.indirecty();   self.slo(m) },
+            0x14 => {let m = self.zeropagex();   self.nop(m) },
+            0x15 => {let m = self.zeropagex();   self.ora(m) },
+            0x16 => {let m = self.zeropagex();   self.asl(m) },
+            0x17 => {let m = self.zeropagex();   self.slo(m) },
+            0x18 => {let m = self.implicit();    self.clc(m) },
+            0x19 => {let m = self.absolutey();   self.ora(m) },
+            0x1A => {let m = self.immediate();   self.nop(m) },
+            0x1B => {let m = self.absolutey();   self.slo(m) },
+            0x1C => {let m = self.absolutex();   self.nop(m) },
+            0x1D => {let m = self.absolutex();   self.ora(m) },
+            0x1E => {let m = self.absolutex();   self.asl(m) },
+            0x1F => {let m = self.absolutex();   self.slo(m) },
+            0x20 => {let m = self.absolute();    self.jsr(m) },
+            0x21 => {let m = self.indirectx();   self.and(m) },
+            0x22 => {let m = self.immediate();   self.kil(m) },
+            0x23 => {let m = self.indirectx();   self.rla(m) },
+            0x24 => {let m = self.zeropage();    self.bit(m) },
+            0x25 => {let m = self.zeropage();    self.and(m) },
+            0x26 => {let m = self.zeropage();    self.rol(m) },
+            0x27 => {let m = self.zeropage();    self.rla(m) },
+            0x28 => {let m = self.implicit();    self.plp(m) },
+            0x29 => {let m = self.immediate();   self.and(m) },
+            0x2A => {let m = self.accumurator(); self.rol(m) },
+            0x2B => {let m = self.immediate();   self.anc(m) },
+            0x2C => {let m = self.absolute();    self.bit(m) },
+            0x2D => {let m = self.absolute();    self.and(m) },
+            0x2E => {let m = self.absolute();    self.rol(m) },
+            0x2F => {let m = self.absolute();    self.rla(m) },
+            0x30 => {let m = self.immediate();   self.bmi(m) },
+            0x31 => {let m = self.indirecty();   self.and(m) },
+            0x32 => {let m = self.immediate();   self.kil(m) },
+            0x33 => {let m = self.indirecty();   self.rla(m) },
+            0x34 => {let m = self.zeropagex();   self.nop(m) },
+            0x35 => {let m = self.zeropagex();   self.and(m) },
+            0x36 => {let m = self.zeropagex();   self.rol(m) },
+            0x37 => {let m = self.zeropagex();   self.rla(m) },
+            0x38 => {let m = self.implicit();    self.sec(m) },
+            0x39 => {let m = self.absolutey();   self.and(m) },
+            0x3A => {let m = self.immediate();   self.nop(m) },
+            0x3B => {let m = self.absolutey();   self.rla(m) },
+            0x3C => {let m = self.absolutex();   self.nop(m) },
+            0x3D => {let m = self.absolutex();   self.and(m) },
+            0x3E => {let m = self.absolutex();   self.rol(m) },
+            0x3F => {let m = self.absolutex();   self.rla(m) },
+            0x40 => {let m = self.implicit();    self.rti(m) },
+            0x41 => {let m = self.indirectx();   self.eor(m) },
+            0x42 => {let m = self.immediate();   self.kil(m) },
+            0x43 => {let m = self.indirectx();   self.sre(m) },
+            0x44 => {let m = self.zeropage();    self.nop(m) },
+            0x45 => {let m = self.zeropage();    self.eor(m) },
+            0x46 => {let m = self.zeropage();    self.lsr(m) },
+            0x47 => {let m = self.zeropage();    self.sre(m) },
+            0x48 => {let m = self.implicit();    self.pha(m) },
+            0x49 => {let m = self.immediate();   self.eor(m) },
+            0x4A => {let m = self.accumurator(); self.lsr(m) },
+            0x4B => {let m = self.immediate();   self.alr(m) },
+            0x4C => {let m = self.absolute();    self.jmp(m) },
+            0x4D => {let m = self.absolute();    self.eor(m) },
+            0x4E => {let m = self.absolute();    self.lsr(m) },
+            0x4F => {let m = self.absolute();    self.sre(m) },
+            0x50 => {let m = self.immediate();   self.bvc(m) },
+            0x51 => {let m = self.indirecty();   self.eor(m) },
+            0x52 => {let m = self.immediate();   self.kil(m) },
+            0x53 => {let m = self.indirecty();   self.sre(m) },
+            0x54 => {let m = self.zeropagex();   self.nop(m) },
+            0x55 => {let m = self.zeropagex();   self.eor(m) },
+            0x56 => {let m = self.zeropagex();   self.lsr(m) },
+            0x57 => {let m = self.zeropagex();   self.sre(m) },
+            0x58 => {let m = self.implicit();    self.cli(m) },
+            0x59 => {let m = self.absolutey();   self.eor(m) },
+            0x5A => {let m = self.immediate();   self.nop(m) },
+            0x5B => {let m = self.absolutey();   self.sre(m) },
+            0x5C => {let m = self.absolutex();   self.nop(m) },
+            0x5D => {let m = self.absolutex();   self.eor(m) },
+            0x5E => {let m = self.absolutex();   self.lsr(m) },
+            0x5F => {let m = self.absolutex();   self.sre(m) },
+            0x60 => {let m = self.implicit();    self.rts(m) },
+            0x61 => {let m = self.indirectx();   self.adc(m) },
+            0x62 => {let m = self.immediate();   self.kil(m) },
+            0x63 => {let m = self.indirectx();   self.rra(m) },
+            0x64 => {let m = self.zeropage();    self.nop(m) },
+            0x65 => {let m = self.zeropage();    self.adc(m) },
+            0x66 => {let m = self.zeropage();    self.ror(m) },
+            0x67 => {let m = self.zeropage();    self.rra(m) },
+            0x68 => {let m = self.implicit();    self.pla(m) },
+            0x69 => {let m = self.immediate();   self.adc(m) },
+            0x6A => {let m = self.accumurator(); self.ror(m) },
+            0x6B => {let m = self.immediate();   self.arr(m) },
+            0x6C => {let m = self.indirect();    self.jmp(m) },
+            0x6D => {let m = self.absolute();    self.adc(m) },
+            0x6E => {let m = self.absolute();    self.ror(m) },
+            0x6F => {let m = self.absolute();    self.rra(m) },
+            0x70 => {let m = self.immediate();   self.bvs(m) },
+            0x71 => {let m = self.indirecty();   self.adc(m) },
+            0x72 => {let m = self.immediate();   self.kil(m) },
+            0x73 => {let m = self.indirecty();   self.rra(m) },
+            0x74 => {let m = self.zeropagex();   self.nop(m) },
+            0x75 => {let m = self.zeropagex();   self.adc(m) },
+            0x76 => {let m = self.zeropagex();   self.ror(m) },
+            0x77 => {let m = self.zeropagex();   self.rra(m) },
+            0x78 => {let m = self.implicit();    self.sei(m) },
+            0x79 => {let m = self.absolutey();   self.adc(m) },
+            0x7A => {let m = self.immediate();   self.nop(m) },
+            0x7B => {let m = self.absolutey();   self.rra(m) },
+            0x7C => {let m = self.absolutex();   self.nop(m) },
+            0x7D => {let m = self.absolutex();   self.adc(m) },
+            0x7E => {let m = self.absolutex();   self.ror(m) },
+            0x7F => {let m = self.absolutex();   self.rra(m) },
+            0x80 => {let m = self.immediate();   self.nop(m) },
+            0x81 => {let m = self.indirectx();   self.sta(m) },
+            0x82 => {let m = self.immediate();   self.nop(m) },
+            0x83 => {let m = self.indirectx();   self.sax(m) },
+            0x84 => {let m = self.zeropage();    self.sty(m) },
+            0x85 => {let m = self.zeropage();    self.sta(m) },
+            0x86 => {let m = self.zeropage();    self.stx(m) },
+            0x87 => {let m = self.zeropage();    self.sax(m) },
+            0x88 => {let m = self.implicit();    self.dey(m) },
+            0x89 => {let m = self.immediate();   self.nop(m) },
+            0x8A => {let m = self.implicit();    self.txa(m) },
+            0x8B => {let m = self.immediate();   self.xaa(m) },
+            0x8C => {let m = self.absolute();    self.sty(m) },
+            0x8D => {let m = self.absolute();    self.sta(m) },
+            0x8E => {let m = self.absolute();    self.stx(m) },
+            0x8F => {let m = self.absolute();    self.sax(m) },
+            0x90 => {let m = self.immediate();   self.bcc(m) },
+            0x91 => {let m = self.indirecty();   self.sta(m) },
+            0x92 => {let m = self.immediate();   self.kil(m) },
+            0x93 => {let m = self.indirecty();   self.ahx(m) },
+            0x94 => {let m = self.zeropagex();   self.sty(m) },
+            0x95 => {let m = self.zeropagex();   self.sta(m) },
+            0x96 => {let m = self.zeropagey();   self.stx(m) },
+            0x97 => {let m = self.zeropagey();   self.sax(m) },
+            0x98 => {let m = self.implicit();    self.tya(m) },
+            0x99 => {let m = self.absolutey();   self.sta(m) },
+            0x9A => {let m = self.implicit();    self.txs(m) },
+            0x9B => {let m = self.immediate();   self.tas(m) },
+            0x9C => {let m = self.absolutex();   self.shy(m) },
+            0x9D => {let m = self.absolutex();   self.sta(m) },
+            0x9E => {let m = self.absolutey();   self.shx(m) },
+            0x9F => {let m = self.absolutey();   self.ahx(m) },
+            0xA0 => {let m = self.immediate();   self.ldy(m) },
+            0xA1 => {let m = self.indirectx();   self.lda(m) },
+            0xA2 => {let m = self.immediate();   self.ldx(m) },
+            0xA3 => {let m = self.indirectx();   self.lax(m) },
+            0xA4 => {let m = self.zeropage();    self.ldy(m) },
+            0xA5 => {let m = self.zeropage();    self.lda(m) },
+            0xA6 => {let m = self.zeropage();    self.ldx(m) },
+            0xA7 => {let m = self.zeropage();    self.lax(m) },
+            0xA8 => {let m = self.implicit();    self.tay(m) },
+            0xA9 => {let m = self.immediate();   self.lda(m) },
+            0xAA => {let m = self.implicit();    self.tax(m) },
+            0xAB => {let m = self.immediate();   self.lax(m) },
+            0xAC => {let m = self.absolute();    self.ldy(m) },
+            0xAD => {let m = self.absolute();    self.lda(m) },
+            0xAE => {let m = self.absolute();    self.ldx(m) },
+            0xAF => {let m = self.absolute();    self.lax(m) },
+            0xB0 => {let m = self.immediate();   self.bcs(m) },
+            0xB1 => {let m = self.indirecty();   self.lda(m) },
+            0xB2 => {let m = self.immediate();   self.kil(m) },
+            0xB3 => {let m = self.indirecty();   self.lax(m) },
+            0xB4 => {let m = self.zeropagex();   self.ldy(m) },
+            0xB5 => {let m = self.zeropagex();   self.lda(m) },
+            0xB6 => {let m = self.zeropagey();   self.ldx(m) },
+            0xB7 => {let m = self.zeropagey();   self.lax(m) },
+            0xB8 => {let m = self.implicit();    self.clv(m) },
+            0xB9 => {let m = self.absolutey();   self.lda(m) },
+            0xBA => {let m = self.implicit();    self.tsx(m) },
+            0xBB => {let m = self.absolutey();   self.las(m) },
+            0xBC => {let m = self.absolutex();   self.ldy(m) },
+            0xBD => {let m = self.absolutex();   self.lda(m) },
+            0xBE => {let m = self.absolutey();   self.ldx(m) },
+            0xBF => {let m = self.absolutey();   self.lax(m) },
+            0xC0 => {let m = self.immediate();   self.cpy(m) },
+            0xC1 => {let m = self.indirectx();   self.cmp(m) },
+            0xC2 => {let m = self.immediate();   self.nop(m) },
+            0xC3 => {let m = self.indirectx();   self.dcp(m) },
+            0xC4 => {let m = self.zeropage();    self.cpy(m) },
+            0xC5 => {let m = self.zeropage();    self.cmp(m) },
+            0xC6 => {let m = self.zeropage();    self.dec(m) },
+            0xC7 => {let m = self.zeropage();    self.dcp(m) },
+            0xC8 => {let m = self.implicit();    self.iny(m) },
+            0xC9 => {let m = self.immediate();   self.cmp(m) },
+            0xCA => {let m = self.implicit();    self.dex(m) },
+            0xCB => {let m = self.immediate();   self.axs(m) },
+            0xCC => {let m = self.absolute();    self.cpy(m) },
+            0xCD => {let m = self.absolute();    self.cmp(m) },
+            0xCE => {let m = self.absolute();    self.dec(m) },
+            0xCF => {let m = self.absolute();    self.dcp(m) },
+            0xD0 => {let m = self.immediate();   self.bne(m) },
+            0xD1 => {let m = self.indirecty();   self.cmp(m) },
+            0xD2 => {let m = self.immediate();   self.kil(m) },
+            0xD3 => {let m = self.indirecty();   self.dcp(m) },
+            0xD4 => {let m = self.zeropagex();   self.nop(m) },
+            0xD5 => {let m = self.zeropagex();   self.cmp(m) },
+            0xD6 => {let m = self.zeropagex();   self.dec(m) },
+            0xD7 => {let m = self.zeropagex();   self.dcp(m) },
+            0xD8 => {let m = self.implicit();    self.cld(m) },
+            0xD9 => {let m = self.absolutey();   self.cmp(m) },
+            0xDA => {let m = self.immediate();   self.nop(m) },
+            0xDB => {let m = self.absolutey();   self.dcp(m) },
+            0xDC => {let m = self.absolutex();   self.nop(m) },
+            0xDD => {let m = self.absolutex();   self.cmp(m) },
+            0xDE => {let m = self.absolutex();   self.dec(m) },
+            0xDF => {let m = self.absolutex();   self.dcp(m) },
+            0xE0 => {let m = self.immediate();   self.cpx(m) },
+            0xE1 => {let m = self.indirectx();   self.sbc(m) },
+            0xE2 => {let m = self.immediate();   self.nop(m) },
+            0xE3 => {let m = self.indirectx();   self.isc(m) },
+            0xE4 => {let m = self.zeropage();    self.cpx(m) },
+            0xE5 => {let m = self.zeropage();    self.sbc(m) },
+            0xE6 => {let m = self.zeropage();    self.inc(m) },
+            0xE7 => {let m = self.zeropage();    self.isc(m) },
+            0xE8 => {let m = self.implicit();    self.inx(m) },
+            0xE9 => {let m = self.immediate();   self.sbc(m) },
+            0xEA => {let m = self.implicit();    self.nop(m) },
+            0xEB => {let m = self.immediate();   self.sbc(m) },
+            0xEC => {let m = self.absolute();    self.cpx(m) },
+            0xED => {let m = self.absolute();    self.sbc(m) },
+            0xEE => {let m = self.absolute();    self.inc(m) },
+            0xEF => {let m = self.absolute();    self.isc(m) },
+            0xF0 => {let m = self.immediate();   self.beq(m) },
+            0xF1 => {let m = self.indirecty();   self.sbc(m) },
+            0xF2 => {let m = self.immediate();   self.kil(m) },
+            0xF3 => {let m = self.indirecty();   self.isc(m) },
+            0xF4 => {let m = self.zeropagex();   self.nop(m) },
+            0xF5 => {let m = self.zeropagex();   self.sbc(m) },
+            0xF6 => {let m = self.zeropagex();   self.inc(m) },
+            0xF7 => {let m = self.zeropagex();   self.isc(m) },
+            0xF8 => {let m = self.implicit();    self.sed(m) },
+            0xF9 => {let m = self.absolutey();   self.sbc(m) },
+            0xFA => {let m = self.immediate();   self.nop(m) },
+            0xFB => {let m = self.absolutey();   self.isc(m) },
+            0xFC => {let m = self.absolutex();   self.nop(m) },
+            0xFD => {let m = self.absolutex();   self.sbc(m) },
+            0xFE => {let m = self.absolutex();   self.inc(m) },
+            0xFF => {let m = self.absolutex();   self.isc(m) },
             _ => panic!("none opcode:{:x}", opcode)
         };
 
@@ -1140,7 +1003,7 @@ impl Cpu {
     }
 
     fn debug(&mut self) {
-        let time = (self.step as f32 * 1.0 / 22_000_000.0);
+        let time = self.step as f32 * 1.0 / 22_000_000.0;
         println!("=====CPU(step:[{:07}({}s)],pc:[{:02x}]====", self.step, time,self.pc);
         print!("a:{:02x}", self.a);
         print!(" x:{:02x}", self.x);

@@ -1,12 +1,9 @@
 mod nes;
 
-use nes::cpu::Cpu;
 use nes::rom::Rom;
 use nes::Nes;
 
 extern crate sdl2;
-
-use std::io::{self, Read};
 
 pub fn init_sdl() {
     // let sdl_context = sdl2::init().unwrap();

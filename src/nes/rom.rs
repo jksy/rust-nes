@@ -2,9 +2,8 @@ extern crate bytes;
 
 use std;
 use std::fs::File;
-use std::io::SeekFrom;
 use std::io::prelude::*;
-use self::bytes::{BytesMut, Bytes, BufMut, Buf};
+use self::bytes::{BytesMut, Bytes, BufMut};
 use std::mem;
 use std::slice;
 
@@ -68,9 +67,9 @@ impl Rom {
     }
 
     pub fn empty() -> Box<Rom> {
-        let mut header: RomHeader = unsafe { mem::zeroed() };
-        let mut prg = BytesMut::with_capacity(0);
-        let mut chr = BytesMut::with_capacity(0);
+        let header: RomHeader = unsafe { mem::zeroed() };
+        let prg = BytesMut::with_capacity(0);
+        let chr = BytesMut::with_capacity(0);
         let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
         Box::new(rom)
     }
@@ -93,29 +92,18 @@ impl Rom {
         println!("CHR Len:{}", self.chr.len());
     }
 
-    pub fn read(&self, addr: &u16) -> u8 {
+    pub fn read(&self, addr: u16) -> u8 {
         if self.header.prg_page_count == 1 {
-            let x = *addr & 0x3FFF;
+            let x = addr & 0x3FFF;
             self.prg[x as usize]
         } else {
-            self.prg[*addr as usize]
+            self.prg[addr as usize]
         }
         // self.chr[addr]
     }
 
-    pub fn prg(&self, addr: u16) -> u8 {
-        self.prg[addr as usize]
-    }
-    pub fn prg_len(&self) -> u16 {
-        self.prg.len() as u16
-    }
     pub fn chr(&self) -> &[u8] {
         &self.chr
-    }
-
-    pub fn chr128(&self, addr: u16) -> &[u8] {
-        let a = addr as usize;
-        &self.chr[a..(a+16)]
     }
 
     pub fn initial_pc(&self) -> u16 {
@@ -147,7 +135,7 @@ impl Rom {
 
     fn read_file(file: &mut File, bytes: &mut BytesMut, read_kbyte: usize) -> Result<(), std::io::Error> {
         let mut buf = [0 as u8; 1024];
-        for x in 0..read_kbyte {
+        for _ in 0..read_kbyte {
             file.read_exact(&mut buf)?;
             bytes.put_slice(&mut buf);
         }

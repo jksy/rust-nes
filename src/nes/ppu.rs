@@ -5,7 +5,6 @@ use nes::bmp::Image;
 use nes::bmp::Pixel;
 use std::fs::File;
 use std::io::prelude::*;
-use std::ops::Range;
 
 #[derive(Clone)]
 pub struct Ppu {
@@ -50,14 +49,14 @@ const STATUS_OVERFLOW : u8 = 0x20u8; // sprite over flow
 const STATUS_SPRITE   : u8 = 0x40u8; // sprite zero hit
 const STATUS_VBLANK   : u8 = 0x80u8;
 
-const MASK_GRAY                     :u8 = 0x01u8;
-const MASK_SHOW_BACKGROUND_LEFTMOST :u8 = 0x02u8;
-const MASK_SHOW_SPRITE_LEFTMOST     :u8 = 0x04u8;
-const MASK_SHOW_BACKGROUND          :u8 = 0x08u8;
-const MASK_SHOW_SPRITE              :u8 = 0x10u8;
-const MASK_EMP_RED                  :u8 = 0x20u8;
-const MASK_EMP_GREEN                :u8 = 0x40u8;
-const MASK_EMP_BLUE                 :u8 = 0x80u8;
+#[allow(dead_code)] const MASK_GRAY                     :u8 = 0x01u8;
+#[allow(dead_code)] const MASK_SHOW_BACKGROUND_LEFTMOST :u8 = 0x02u8;
+#[allow(dead_code)] const MASK_SHOW_SPRITE_LEFTMOST     :u8 = 0x04u8;
+#[allow(dead_code)] const MASK_SHOW_BACKGROUND          :u8 = 0x08u8;
+#[allow(dead_code)] const MASK_SHOW_SPRITE              :u8 = 0x10u8;
+#[allow(dead_code)] const MASK_EMP_RED                  :u8 = 0x20u8;
+#[allow(dead_code)] const MASK_EMP_GREEN                :u8 = 0x40u8;
+#[allow(dead_code)] const MASK_EMP_BLUE                 :u8 = 0x80u8;
 
 impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
@@ -105,7 +104,6 @@ impl Ppu {
 
         // to bmp
         let mut img = Image::new(256, 240);
-        let mapper = self.mapper.borrow();
         // let pal = [0x31u8, 0x21u8, 0x11u8, 0x01u8];
         //
         let pal = [[0xFFu8, 0xFFu8, 0xFFu8],
@@ -119,7 +117,7 @@ impl Ppu {
         let mapper = self.mapper.borrow();
         for y in 0..30 {
             for x in 0..32 {
-                let address = (self.name_table_addr() + x + y * 32);
+                let address = self.name_table_addr() + x + y * 32;
                 println!("address:{:04x}", address);
                 let sprite_index = self.vram[address as usize] as u16;
                 let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
@@ -142,13 +140,13 @@ impl Ppu {
                 }
             }
         }
-        img.save("bg.bmp");
+        let _ = img.save("bg.bmp").unwrap();
         self.dump_vram();
     }
 
     fn dump_vram(&self) {
         let mut file = File::create("vram.dmp").unwrap();
-        file.write_all(&self.vram);
+        let _ = file.write_all(&self.vram).unwrap();
     }
 
     fn process_cycle(&mut self) {
