@@ -18,6 +18,8 @@ use nes::joypad::Joypad;
 use nes::ppu::Ppu;
 use nes::mapper::Mapper;
 use std::sync::mpsc::channel;
+use std::sync::mpsc::Sender;
+use nes::bmp::Image;
 use std::thread;
 use std::time;
 
@@ -52,24 +54,20 @@ impl Nes {
     }
 
     pub fn run(&mut self) {
-        let (sender, receiver) = channel();
-
-        println!("==============================");
-        thread::spawn(
-            move || {
-                loop {
-                    thread::sleep(time::Duration::new(0, 50));
-                    let _ = sender.send(0).unwrap();
-                }
-            });
-
         loop {
-            let _ = receiver.recv().unwrap();
             self.tick();
         }
     }
 
-    fn tick(&mut self) {
+    pub fn renderable(&self) -> bool {
+        self.ppu.borrow().renderable()
+    }
+
+    pub fn render_image(&self, img: &mut Image) {
+        self.ppu.borrow().render_image(img)
+    }
+
+    pub fn tick(&mut self) {
         {
             // println!("ppu.tick()");
             let mut ppu = self.ppu.borrow_mut();
@@ -84,7 +82,6 @@ impl Nes {
         self.mbc.borrow_mut().set_rom(rom);
         self.cpu.setup();
     }
-
 
     pub fn reset(&mut self) {
         self.cpu.reset();

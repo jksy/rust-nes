@@ -5,6 +5,7 @@ use nes::bmp::Image;
 use nes::bmp::Pixel;
 use std::fs::File;
 use std::io::prelude::*;
+use std::sync::mpsc::Sender;
 
 #[derive(Clone)]
 pub struct Ppu {
@@ -32,6 +33,7 @@ pub struct Ppu {
     vram_write_addr: Vec<u8>,
     scroll_position: Vec<u8>,
     is_raise_nmi:    bool, // true:when raise interruput
+    renderer:  Option<Sender<Image>>,
 }
 
 const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
@@ -78,6 +80,7 @@ impl Ppu {
             vram_write_addr:          vec![0,0],
             scroll_position:          vec![0,0],
             is_raise_nmi   : false,
+            renderer       : None,
         }
     }
 
@@ -92,18 +95,23 @@ impl Ppu {
         }
     }
 
+    pub fn set_image_renderer(&mut self, renderer: Sender<Image>) {
+        self.renderer = Some(renderer);
+    }
+
     fn print_bg_name_table<'a>(&self) {
         let addr = self.name_table_addr();
         println!("======== BG NAME TABLE({:04x}) =====", addr);
-        for y in 0..30 {
-            let start = (addr + y * 32) as usize;
-            let end = start + 32;
-            let s = String::from_utf8_lossy(&self.vram[start..end]);
-            println!("{:02}:{}", y, s);
-        }
 
-        // to bmp
-        let mut img = Image::new(256, 240);
+        self.dump_vram();
+    }
+
+    pub fn renderable(&self) -> bool {
+        self.current_line == 0 && self.current_cycle == 0
+    }
+
+    pub fn render_image(&self, img: &mut Image) {
+        // let mut img = Image::new(256, 240);
         // let pal = [0x31u8, 0x21u8, 0x11u8, 0x01u8];
         //
         let pal = [[0xFFu8, 0xFFu8, 0xFFu8],
@@ -134,14 +142,15 @@ impl Ppu {
                         let pixel = Pixel::new(pal[index][0], pal[index][1], pal[index][2]);
                         let x = base_x + pix_x;
                         let y = base_y + pix_y;
-                        println!("set_pixel({:02x},{:02x},{:?})", x, y, pixel);
                         img.set_pixel(x as u32, y as u32, pixel);
                     }
                 }
             }
         }
-        let _ = img.save("bg.bmp").unwrap();
-        self.dump_vram();
+        // let _ = img.save("bg.bmp").unwrap();
+        // if self.renderer.is_some() {
+        //     let _ = &self.renderer.as_ref().unwrap().send(img);
+        // }
     }
 
     fn dump_vram(&self) {
