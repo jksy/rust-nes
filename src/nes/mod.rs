@@ -6,7 +6,7 @@ mod cpu;
 pub mod rom;
 mod mbc;
 mod ppu;
-mod joypad;
+pub mod joypad;
 mod mapper;
 mod addressing_mode;
 
@@ -27,7 +27,7 @@ pub struct Nes {
     cpu: Cpu,
     mbc: Rc<RefCell<Box<Mbc>>>,
     ppu: Rc<RefCell<Box<Ppu>>>,
-    // mapper: Rc<RefCell<Box<Mapper>>>,
+    joypad: Rc<RefCell<Box<Joypad>>>,
     // tick: u32,
 }
 
@@ -49,7 +49,7 @@ impl Nes {
             cpu: cpu,
             mbc: mbc,
             ppu: ppu,
-            // mapper: mapper,
+            joypad: joypad,
         }
     }
 
@@ -57,14 +57,6 @@ impl Nes {
         loop {
             self.tick();
         }
-    }
-
-    pub fn renderable(&self) -> bool {
-        self.ppu.borrow().renderable()
-    }
-
-    pub fn render_image(&self, img: &mut Image) {
-        self.ppu.borrow().render_image(img)
     }
 
     pub fn tick(&mut self) {
@@ -86,4 +78,13 @@ impl Nes {
     pub fn reset(&mut self) {
         self.cpu.reset();
     }
+
+    pub fn render_image(&self, img: &mut Image) {
+        self.ppu.borrow().render_image(img)
+    }
+
+    pub fn set_joypad_button_state(&self, state: u8) {
+        self.joypad.borrow_mut().set_button_state(state);
+    }
+
 }

@@ -713,7 +713,7 @@ impl Cpu {
 
     pub fn tick(&mut self) {
         self.step += 1;
-        self.debug();
+        // self.debug();
 
         if self.process_nmi() {
             return;
@@ -1074,9 +1074,9 @@ impl Cpu {
         // println!("pop() => low({:x})", low);
         let low = self.pop() as u16;
         let high = self.pop() as u16;
-        println!("pop() => high({:x})", high);
+        // println!("pop() => high({:x})", high);
         let data = (high << 8) | low;
-        println!("pop16(self.s:{:x}, {:x})", self.s, data);
+        // println!("pop16(self.s:{:x}, {:x})", self.s, data);
         data
     }
 

@@ -42,7 +42,7 @@ impl Mbc {
         let x = match addr {
             0x0000u16...0x1FFFu16 => self.ram[(addr & !0x0800) as usize],
             0x2000u16...0x2007u16 => self.ppu.borrow().read(addr),
-            0x4016u16...0x4017u16 => self.joypad.borrow().read(addr),
+            0x4016u16...0x4017u16 => self.joypad.borrow_mut().read(addr),
             0x6000u16...0x7FFFu16 => { // self.sram[],
                 0x00u8
             },
@@ -75,8 +75,8 @@ impl Mbc {
                 self.ppu.borrow_mut().write(addr, value)
             },
             // 0x2000u16...0x3FFFu16 => self.io[], // dont use
-            0x4000u16...0x401Fu16 => {}, // ignore(APU, etc)
-            0x4016u16...0x417Fu16 => {
+            0x4000u16...0x4015u16 => {}, // ignore(APU, etc)
+            0x4016u16...0x4017u16 => {
                 self.joypad.borrow_mut().write(addr,value)
             },
             // 0x4020u16...0x5FFFu16 => self.io[], // extend ram

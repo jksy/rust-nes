@@ -126,7 +126,7 @@ impl Ppu {
         for y in 0..30 {
             for x in 0..32 {
                 let address = self.name_table_addr() + x + y * 32;
-                println!("address:{:04x}", address);
+                // println!("address:{:04x}", address);
                 let sprite_index = self.vram[address as usize] as u16;
                 let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
                 let tail_addr = head_addr + 16;
@@ -311,12 +311,12 @@ impl<'a> Sprite<'a> {
     pub fn pal_index(&self, x: u8, y: u8) -> u8 {
         let low = self.low[y as usize] << x & 0x80;
         let high = self.high[y as usize] << x & 0x80;
-        println!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
-                 x, y,
-                 self.low[y as usize],
-                 self.high[y as usize],
-                 low,
-                 high );
+        // println!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
+        //          x, y,
+        //          self.low[y as usize],
+        //          self.high[y as usize],
+        //          low,
+        //          high );
         low >> 7 | high >> 6
     }
 }
