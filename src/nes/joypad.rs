@@ -40,7 +40,7 @@ impl Joypad {
     }
 
     pub fn set_button_state(&mut self, state: u8) {
-        println!("set_button_state({:x}) => {:?}", state, self);
+        // println!("set_button_state({:x}) => {:?}", state, self);
         if (self.register & 0x01) == 0x01 {
             self.reset();
             self.state = state;
@@ -52,10 +52,10 @@ impl Joypad {
     }
 
     pub fn read_state(&mut self) -> u8 {
-        println!("joypad: register:{:x}, state:{:x}, counter:{:x}",
-                 self.register,
-                 self.state,
-                 self.counter);
+        // println!("joypad: register:{:x}, state:{:x}, counter:{:x}",
+        //          self.register,
+        //          self.state,
+        //          self.counter);
         let result = (self.state >> self.counter) & 0x01;
         if self.counter < 0x07 {
             self.counter += 1;

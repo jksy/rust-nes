@@ -33,7 +33,7 @@ pub struct Ppu {
     vram_write_addr: Vec<u8>,
     scroll_position: Vec<u8>,
     is_raise_nmi:    bool, // true:when raise interruput
-    renderer:  Option<Sender<Image>>,
+    is_display_changed: bool,
 }
 
 const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
@@ -80,7 +80,7 @@ impl Ppu {
             vram_write_addr:          vec![0,0],
             scroll_position:          vec![0,0],
             is_raise_nmi   : false,
-            renderer       : None,
+            is_display_changed   : false,
         }
     }
 
@@ -93,10 +93,6 @@ impl Ppu {
         if self.current_line == 0 && self.current_cycle == 0 {
             self.print_bg_name_table();
         }
-    }
-
-    pub fn set_image_renderer(&mut self, renderer: Sender<Image>) {
-        self.renderer = Some(renderer);
     }
 
     fn print_bg_name_table<'a>(&self) {
@@ -240,8 +236,12 @@ impl Ppu {
                 self.vram_write_addr.clear();
                 self.vram_write_addr.insert(0, 0);
                 self.vram_write_addr.insert(0, 0);
+                self.is_display_changed = true
             },
-            0x2001 => self.mask = data,
+            0x2001 => {
+                self.mask = data;
+                self.is_display_changed = true
+            },
             // 0x2003 => self.oam_address = data,
             // 0x2004 => self.oam_data = data,
             0x2005 => {
@@ -251,6 +251,7 @@ impl Ppu {
                          self.scroll_position[0],
                          self.scroll_position[1],
                          );
+                self.is_display_changed = true;
             },
             0x2006 => {
                 self.vram_write_addr.insert(0, data);
@@ -269,6 +270,7 @@ impl Ppu {
                 address += self.nametable_increment_value();
                 self.vram_write_addr[0] = (address & 0xFF) as u8;
                 self.vram_write_addr[1] = (address >> 8) as u8;
+                self.is_display_changed = true;
             },
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
         }
@@ -296,6 +298,14 @@ impl Ppu {
         self.is_raise_nmi = false;
         result
     }
+
+    pub fn is_display_changed(&self) -> bool {
+        self.is_display_changed
+    }
+
+    pub fn clear_display_changed(&mut self) {
+        self.is_display_changed = false
+    }
 }
 
 pub struct Sprite<'a> {
@@ -319,5 +329,6 @@ impl<'a> Sprite<'a> {
         //          high );
         low >> 7 | high >> 6
     }
+
 }
 

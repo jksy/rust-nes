@@ -83,6 +83,14 @@ impl Nes {
         self.ppu.borrow().render_image(img)
     }
 
+    pub fn is_display_changed(&self) -> bool {
+        self.ppu.borrow().is_display_changed()
+    }
+
+    pub fn clear_display_changed(&self) {
+        self.ppu.borrow_mut().clear_display_changed()
+    }
+
     pub fn set_joypad_button_state(&self, state: u8) {
         self.joypad.borrow_mut().set_button_state(state);
     }

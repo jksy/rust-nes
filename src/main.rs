@@ -15,6 +15,7 @@ use sdl2::keyboard::Keycode;
 use sdl2::keyboard::Scancode;
 use std::collections::HashSet;
 use std::{thread, time};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -50,6 +51,7 @@ fn main() {
         create_texture_streaming(PixelFormatEnum::RGB888, 256, 240).unwrap();
 
     let mut slow = true;
+    let mut prev_render_time = SystemTime::now();
 
     'running: loop {
         for event in events.poll_iter() {
@@ -89,19 +91,27 @@ fn main() {
             }
         }
         nes.set_joypad_button_state(button);
-        println!("scancode:{:?}", button);
 
 
         nes.tick();
+
         if slow {
             thread::sleep(time::Duration::from_millis(100));
         }
 
-        counter += 1;
-        if counter < 256 * 60 {
+        // update canvas if display changed
+        let result = nes.is_display_changed();
+        if nes.is_display_changed() == false {
             continue;
         }
-        counter = 0;
+        // TODO:
+        let elapsed = prev_render_time.elapsed().unwrap();
+        if elapsed.as_secs() < 1 {
+            continue;
+        }
+        prev_render_time = SystemTime::now();
+
+        println!("========== draw image ===============");
 
         // draw nes display
         let mut img = Image::new(256, 240);
@@ -121,6 +131,9 @@ fn main() {
         }).unwrap();
         canvas.copy(&texture, None, Some(Rect::new(0, 0, 255, 239))).unwrap();
         canvas.present();
+
+        nes.clear_display_changed();
+        prev_render_time = SystemTime::now();
     }
 }
 

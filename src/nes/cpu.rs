@@ -71,6 +71,7 @@ macro_rules !cmp {
 macro_rules !branch {
     ($self:ident, $name:expr, $flag:expr, $addr:expr, $result:expr) => {
         {
+            println!("opcode:{}", $name);
             if $self.get_flag($flag) == $result {
                 let offset = $addr.read($self) as i8 as i32;
                 let jump_addr = (($self.pc as i32) + offset) as u16 + 1;
@@ -183,7 +184,9 @@ impl Cpu {
     // subrouting
     fn jmp<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:JMP");
-        self.pc = addr.read16_addr(self);
+        let jump_addr = addr.read16_addr(self);
+        println!("jump_addr:{:x}", jump_addr);
+        self.pc = jump_addr;
         false
     }
     fn jsr<T:AddressingMode>(&mut self, addr: T) -> bool {
@@ -660,6 +663,7 @@ impl Cpu {
 
     fn indirect(&mut self) -> MemoryAddressingMode {
         let addr = self.read16(self.pc);
+        let addr = self.read16(addr);
         MemoryAddressingMode::new(addr, 2)
     }
 
@@ -713,7 +717,7 @@ impl Cpu {
 
     pub fn tick(&mut self) {
         self.step += 1;
-        // self.debug();
+        self.debug();
 
         if self.process_nmi() {
             return;
