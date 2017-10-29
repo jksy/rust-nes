@@ -668,9 +668,9 @@ impl Cpu {
     }
 
     fn indirectx(&mut self) -> MemoryAddressingMode {
-        let zp_addr = self.read(self.pc) as u16 + self.x as u16;
-        // let addr = self.read16bug(zp_addr);
-        let addr = self.read16(zp_addr);
+        let operand = self.read(self.pc) as u16;
+        // let addr = self.read16bug(operand);
+        let addr = (self.read16(operand) + self.x as u16) & 0x00FF;
         MemoryAddressingMode::new(addr, 1)
     }
 
