@@ -71,11 +71,11 @@ macro_rules !cmp {
 macro_rules !branch {
     ($self:ident, $name:expr, $flag:expr, $addr:expr, $result:expr) => {
         {
-            println!("opcode:{}", $name);
+            info!("opcode:{}", $name);
             if $self.get_flag($flag) == $result {
                 let offset = $addr.read($self) as i8 as i32;
                 let jump_addr = (($self.pc as i32) + offset) as u16 + 1;
-                println!("{} Jump pc:{:x} -> {:x}", $name, $self.pc, jump_addr);
+                info!("{} Jump pc:{:x} -> {:x}", $name, $self.pc, jump_addr);
                 $self.pc = jump_addr;
                 true
             } else {
@@ -99,7 +99,7 @@ impl Cpu {
 
     pub fn setup(&mut self) {
         let pc = self.mbc.borrow().initial_pc();
-        println!("setup() pc:{:x} -> {:x}", self.pc, pc);
+        info!("setup() pc:{:x} -> {:x}", self.pc, pc);
         self.set_flag(FLAG_CRY, false);
         self.set_flag(FLAG_ZER, false);
         self.set_flag(FLAG_IRQ, false);
@@ -112,70 +112,70 @@ impl Cpu {
     }
 
     fn brk<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:BRK");
+        info!("opcode:BRK");
         self.do_irq("irq");
         false
     }
 
     fn kil<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:KIL");
+        info!("opcode:KIL");
         self.pc += addr.length();
         unimplemented!();
     }
 
     fn slo<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SLO");
+        info!("opcode:SLO");
         self.pc += addr.length();
         unimplemented!();
     }
     fn nop<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:NOP");
+        info!("opcode:NOP");
         self.pc += addr.length();
         true
     }
     fn anc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ANC");
+        info!("opcode:ANC");
         self.pc += addr.length();
         unimplemented!();
     }
     fn clc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CLC");
+        info!("opcode:CLC");
         self.set_flag(FLAG_CRY, false);
         self.pc += addr.length();
         true
     }
     fn sec<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SEC");
+        info!("opcode:SEC");
         self.set_flag(FLAG_CRY, true);
         self.pc += addr.length();
         true
     }
     fn cli<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CLI");
+        info!("opcode:CLI");
         self.set_flag(FLAG_IRQ, false);
         self.pc += addr.length();
         true
     }
     fn sei<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SEI");
+        info!("opcode:SEI");
         self.set_flag(FLAG_IRQ, true);
         self.pc += addr.length();
         true
     }
     fn clv<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CLV");
+        info!("opcode:CLV");
         self.set_flag(FLAG_OVF, false);
         self.pc += addr.length();
         true
     }
     fn cld<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CLD");
+        info!("opcode:CLD");
         self.set_flag(FLAG_DEC, false);
         self.pc += addr.length();
         true
     }
     fn sed<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SED");
+        info!("opcode:SED");
         self.set_flag(FLAG_DEC, true);
         self.pc += addr.length();
         true
@@ -183,14 +183,14 @@ impl Cpu {
 
     // subrouting
     fn jmp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:JMP");
+        info!("opcode:JMP");
         let jump_addr = addr.read16_addr(self);
-        println!("jump_addr:{:x}", jump_addr);
+        info!("jump_addr:{:x}", jump_addr);
         self.pc = jump_addr;
         false
     }
     fn jsr<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:JSR");
+        info!("opcode:JSR");
         self.set_flag(FLAG_DEC, true);
         let pc = self.pc;
         self.push16(pc + addr.length() - 1);
@@ -198,17 +198,17 @@ impl Cpu {
         false
     }
     fn rts<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:RTS");
+        info!("opcode:RTS");
         let return_addr = self.pop16();
-        println!("self.pc({:x}) => {:x}", self.pc, return_addr);
+        info!("self.pc({:x}) => {:x}", self.pc, return_addr);
         self.pc = return_addr + 1;
         false
     }
     fn rti<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:RTI");
+        info!("opcode:RTI");
         self.p = self.pop();
         let return_addr = self.pop16();
-        println!("self.pc({:x}) => {:x}", self.pc, return_addr);
+        info!("self.pc({:x}) => {:x}", self.pc, return_addr);
         self.pc = return_addr;
         false
     }
@@ -225,28 +225,28 @@ impl Cpu {
 
     // copy operator
     fn sta<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:STA");
+        info!("opcode:STA");
         let a = self.a;
         addr.write(self, a);
         self.pc += addr.length();
         true
     }
     fn stx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:STX");
+        info!("opcode:STX");
         let x = self.x;
         addr.write(self, x);
         self.pc += addr.length();
         true
     }
     fn sty<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:STY");
+        info!("opcode:STY");
         let y = self.y;
         addr.write(self, y);
         self.pc += addr.length();
         true
     }
     fn lda<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LDA");
+        info!("opcode:LDA");
         let value = addr.read(self);
         self.a = value;
         self.set_negative_flag(value);
@@ -255,7 +255,7 @@ impl Cpu {
         true
     }
     fn ldx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LDX");
+        info!("opcode:LDX");
         let value = addr.read(self);
         self.x = value;
         self.set_negative_flag(value);
@@ -264,7 +264,7 @@ impl Cpu {
         true
     }
     fn ldy<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LDY");
+        info!("opcode:LDY");
         let value = addr.read(self);
         self.y = value;
         self.set_negative_flag(value);
@@ -273,7 +273,7 @@ impl Cpu {
         true
     }
     fn tax<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TAX");
+        info!("opcode:TAX");
         let value = self.a;
         self.x = value;
         self.set_negative_flag(value);
@@ -282,7 +282,7 @@ impl Cpu {
         true
     }
     fn tay<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TAY");
+        info!("opcode:TAY");
         let value = self.a;
         self.y = value;
         self.set_negative_flag(value);
@@ -291,7 +291,7 @@ impl Cpu {
         true
     }
     fn tsx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TSX");
+        info!("opcode:TSX");
         let value = self.s;
         self.x = value;
         self.set_negative_flag(value);
@@ -300,7 +300,7 @@ impl Cpu {
         true
     }
     fn txa<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TXA");
+        info!("opcode:TXA");
         let value = self.x;
         self.a = value;
         self.set_negative_flag(value);
@@ -309,14 +309,14 @@ impl Cpu {
         true
     }
     fn txs<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TXS");
+        info!("opcode:TXS");
         let value = self.x;
         self.s = value;
         self.pc += addr.length();
         true
     }
     fn tya<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TYA");
+        info!("opcode:TYA");
         let value = self.y;
         self.a = value;
         self.set_negative_flag(value);
@@ -327,7 +327,7 @@ impl Cpu {
 
     // caluculate oprators
     fn adc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ADC");
+        info!("opcode:ADC");
         let value = addr.read(self) as u16;
         let target = self.a as u16;
         let mut result = target.wrapping_add(value);
@@ -346,7 +346,7 @@ impl Cpu {
         true
     }
     fn and<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:AND");
+        info!("opcode:AND");
         let result = self.a & addr.read(self);
         self.set_negative_flag(result);
         self.set_zero_flag(result);
@@ -355,7 +355,7 @@ impl Cpu {
         true
     }
     fn asl<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ASL");
+        info!("opcode:ASL");
         let target = addr.read(self);
         let carry = (target & 0x80) == 0x80;
         let result = target.wrapping_shl(1);
@@ -367,7 +367,7 @@ impl Cpu {
         true
     }
     fn bit<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:BIT");
+        info!("opcode:BIT");
         let operand = addr.read(self);
         let result = self.a & operand;
         self.set_zero_flag(result);
@@ -377,27 +377,27 @@ impl Cpu {
         true
     }
     fn cmp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CMP");
+        info!("opcode:CMP");
         let v = addr.read(self);
-        println!("self.a={:x}, addr.read={:x}", self.a, v);
+        info!("self.a={:x}, addr.read={:x}", self.a, v);
         cmp!(self, self.a, v);
         self.pc += addr.length();
         true
     }
     fn cpx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CPX");
+        info!("opcode:CPX");
         cmp!(self, self.x, addr.read(self));
         self.pc += addr.length();
         true
     }
     fn cpy<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:CPY");
+        info!("opcode:CPY");
         cmp!(self, self.y, addr.read(self));
         self.pc += addr.length();
         true
     }
     fn dec<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:DEC");
+        info!("opcode:DEC");
         let mut value = addr.read(self);
         dec!(self, value);
         addr.write(self, value);
@@ -405,19 +405,19 @@ impl Cpu {
         true
     }
     fn dex<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:DEX");
+        info!("opcode:DEX");
         dec!(self, self.x);
         self.pc += addr.length();
         true
     }
     fn dey<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:DEY");
+        info!("opcode:DEY");
         dec!(self, self.y);
         self.pc += addr.length();
         true
     }
     fn eor<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:EOR");
+        info!("opcode:EOR");
         let operand = addr.read(self);
         let result = operand ^ self.a;
         self.set_zero_flag(result);
@@ -427,7 +427,7 @@ impl Cpu {
         true
     }
     fn inc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:INC");
+        info!("opcode:INC");
         let mut value = addr.read(self);
         inc!(self, value);
         addr.write(self, value);
@@ -435,19 +435,19 @@ impl Cpu {
         true
     }
     fn inx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:INX");
+        info!("opcode:INX");
         inc!(self, self.x);
         self.pc += addr.length();
         true
     }
     fn iny<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:INY");
+        info!("opcode:INY");
         inc!(self, self.y);
         self.pc += addr.length();
         true
     }
     fn lsr<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LSR");
+        info!("opcode:LSR");
         let target = addr.read(self);
         let carry = (target & 0x01) == 0x01;
         let result = target.wrapping_shr(1);
@@ -459,7 +459,7 @@ impl Cpu {
         true
     }
     fn ora<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ORA");
+        info!("opcode:ORA");
         let result = self.a | addr.read(self);
         self.set_negative_flag(result);
         self.set_zero_flag(result);
@@ -468,7 +468,7 @@ impl Cpu {
         true
     }
     fn rol<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ROL");
+        info!("opcode:ROL");
         let data = addr.read(self);
         let carry = (data & 0x80) == 0x80;
         let mut result = data << 1;
@@ -485,7 +485,7 @@ impl Cpu {
         true
     }
     fn ror<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ROR");
+        info!("opcode:ROR");
         let data = addr.read(self);
         let carry = (data & 0x01) == 0x01;
         let mut result = data >> 1;
@@ -502,7 +502,7 @@ impl Cpu {
         true
     }
     fn sre<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SRE");
+        info!("opcode:SRE");
         let data = addr.read(self);
         self.set_flag(FLAG_CRY, (data & 0x01) != 0);
         addr.write(self, data >> 1);
@@ -510,7 +510,7 @@ impl Cpu {
         true
     }
     fn sbc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SBC");
+        info!("opcode:SBC");
         let value = addr.read(self) as u16;
         let target = self.a as u16;
         let mut result = target.wrapping_sub(value);
@@ -530,7 +530,7 @@ impl Cpu {
 
     // stack
     fn pha<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:PHA");
+        info!("opcode:PHA");
         let a = self.a;
         self.push(a);
         self.set_negative_flag(a);
@@ -539,14 +539,14 @@ impl Cpu {
         true
     }
     fn php<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:PHP");
+        info!("opcode:PHP");
         let p = self.p | FLAG_BRK | FLAG_RSV;
         self.push(p);
         self.pc += addr.length();
         true
     }
     fn pla<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:PLA");
+        info!("opcode:PLA");
         let a = self.pop();
         self.a = a;
         self.set_negative_flag(a);
@@ -555,7 +555,7 @@ impl Cpu {
         true
     }
     fn plp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:PLP");
+        info!("opcode:PLP");
         self.p = self.pop();
         self.pc += addr.length();
         true
@@ -588,67 +588,67 @@ impl Cpu {
     }
 
     fn rla<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:RLA");
+        info!("opcode:RLA");
         unimplemented!();
     }
     fn rra<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:RRA");
+        info!("opcode:RRA");
         unimplemented!();
     }
     fn alr<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ALR");
+        info!("opcode:ALR");
         unimplemented!();
     }
     fn arr<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ARR");
+        info!("opcode:ARR");
         unimplemented!();
     }
     fn sax<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SAX");
+        info!("opcode:SAX");
         unimplemented!();
     }
     fn say<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SAY");
+        info!("opcode:SAY");
         unimplemented!();
     }
     fn xaa<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:XAA");
+        info!("opcode:XAA");
         unimplemented!();
     }
     fn ahx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:AHX");
+        info!("opcode:AHX");
         unimplemented!();
     }
     fn tas<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:TAS");
+        info!("opcode:TAS");
         unimplemented!();
     }
     fn shx<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SHX");
+        info!("opcode:SHX");
         unimplemented!();
     }
     fn shy<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:SHY");
+        info!("opcode:SHY");
         unimplemented!();
     }
     fn lax<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LAX");
+        info!("opcode:LAX");
         unimplemented!();
     }
     fn las<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:LAS");
+        info!("opcode:LAS");
         unimplemented!();
     }
     fn dcp<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:DCP");
+        info!("opcode:DCP");
         unimplemented!();
     }
     fn axs<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:AXS");
+        info!("opcode:AXS");
         unimplemented!();
     }
     fn isc<T:AddressingMode>(&mut self, addr: T) -> bool {
-        println!("opcode:ISC");
+        info!("opcode:ISC");
         unimplemented!();
     }
 
@@ -724,6 +724,7 @@ impl Cpu {
         MemoryAddressingMode::new(addr, 2)
     }
 
+    #[inline(always)]
     pub fn tick(&mut self) {
         self.step += 1;
         self.debug();
@@ -1005,24 +1006,25 @@ impl Cpu {
     }
 
     fn print_diff(&self, before: Cpu) {
-        if self.a != before.a { println!("a: {:x} -> {:x}", before.a, self.a) }
-        if self.x != before.x { println!("x: {:x} -> {:x}", before.x, self.x) }
-        if self.y != before.y { println!("y: {:x} -> {:x}", before.y, self.y) }
-        if self.pc != before.pc { println!("pc: {:x} -> {:x}", before.pc, self.pc) }
-        if self.s != before.s { println!("s: {:x} -> {:x}", before.s, self.s) }
+        if self.a != before.a { info!("a: {:x} -> {:x}", before.a, self.a) }
+        if self.x != before.x { info!("x: {:x} -> {:x}", before.x, self.x) }
+        if self.y != before.y { info!("y: {:x} -> {:x}", before.y, self.y) }
+        if self.pc != before.pc { info!("pc: {:x} -> {:x}", before.pc, self.pc) }
+        if self.s != before.s { info!("s: {:x} -> {:x}", before.s, self.s) }
         if self.p != before.p {
-            println!("p: 0b{:08b} -> 0b{:08b}", before.p, self.p)
+            info!("p: 0b{:08b} -> 0b{:08b}", before.p, self.p)
         }
     }
 
     fn debug(&mut self) {
         let time = self.step as f32 * 1.0 / 22_000_000.0;
-        println!("=====CPU(step:[{:07}({}s)],pc:[{:02x}]====", self.step, time,self.pc);
-        print!("a:{:02x}", self.a);
-        print!(" x:{:02x}", self.x);
-        print!(" y:{:02x}", self.y);
-        println!(" s:{:02x}", self.s);
-        println!("p[{:x}] CRY:{}, ZER:{}, IRQ:{}, DEC:{}, BRK:{}, RSV:{}, OVF:{}, NEG:{}",
+        info!("=====CPU(step:[{:07}({}s)],pc:[{:02x}]====", self.step, time,self.pc);
+        info!("a:{:02x}  x:{:02x}  y:{:02x}  s:{:02x}",
+              self.a,
+              self.x,
+              self.y,
+              self.s);
+        info!("p[{:x}] CRY:{}, ZER:{}, IRQ:{}, DEC:{}, BRK:{}, RSV:{}, OVF:{}, NEG:{}",
                  self.p,
                  (self.p & FLAG_CRY) != 0,
                  (self.p & FLAG_ZER) != 0,
@@ -1035,7 +1037,7 @@ impl Cpu {
                  );
         let addr = 0x00u16;
         let test_result = self.read(addr);
-        println!("test_result:0x{:x}", test_result);
+        info!("test_result:0x{:x}", test_result);
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -1052,13 +1054,13 @@ impl Cpu {
 
     fn push(&mut self, data: u8) {
         let addr = self.s as u16 + 0x0100;
-        println!("push(addr => {:x}, data => {:x})", addr, data);
+        info!("push(addr => {:x}, data => {:x})", addr, data);
         self.mbc.borrow_mut().write(addr, data);
         self.s -= 1;
     }
 
     fn push16(&mut self, data: u16) {
-        println!("push16(self.s:{:x}, {:x})", self.s, data);
+        info!("push16(self.s:{:x}, {:x})", self.s, data);
         let low = (data & 0xFF) as u8;
         let high = (data >> 8) as u8;
         self.push(high);
@@ -1069,17 +1071,17 @@ impl Cpu {
         self.s += 1;
         let addr = (self.s as u16) + 0x0100;
         let data = self.mbc.borrow_mut().read(addr);
-        // println!("pop(addr => {:x}, data => {:x})", addr, data);
+        // info!("pop(addr => {:x}, data => {:x})", addr, data);
         data
     }
 
     fn pop16(&mut self) -> u16 {
-        // println!("pop() => low({:x})", low);
+        // info!("pop() => low({:x})", low);
         let low = self.pop() as u16;
         let high = self.pop() as u16;
-        // println!("pop() => high({:x})", high);
+        // info!("pop() => high({:x})", high);
         let data = (high << 8) | low;
-        // println!("pop16(self.s:{:x}, {:x})", self.s, data);
+        // info!("pop16(self.s:{:x}, {:x})", self.s, data);
         data
     }
 
@@ -1112,13 +1114,13 @@ impl Cpu {
             let mbc = self.mbc.borrow_mut();
             let enable = mbc.is_enable_nmi();
             let raised = mbc.is_raise_nmi();
-            // println!("enable_nmi:{}, raise_nmi:{}", raised, raised);
+            // info!("enable_nmi:{}, raise_nmi:{}", raised, raised);
             enable && raised
         };
-        // println!("need_irq:{}", need_irq);
+        // info!("need_irq:{}", need_irq);
 
         if need_irq {
-            println!("do_irq");
+            info!("do_irq");
             self.do_irq("nmi");
             true
         } else {
@@ -1128,7 +1130,7 @@ impl Cpu {
 
     pub fn reset(&mut self) {
         self.pc = self.vector("reset");
-        println!("reset vector:{:x}", self.pc);
+        info!("reset vector:{:x}", self.pc);
 
         self.s = 0xFF;
     }

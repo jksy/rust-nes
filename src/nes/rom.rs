@@ -76,20 +76,20 @@ impl Rom {
 
     pub fn print(&self) {
         let magic_number = self.header.magic_number;
-        println!("=======ROM Information=======");
-        println!("magic_number:[{}{}{}{}]",
+        info!("=======ROM Information=======");
+        info!("magic_number:[{}{}{}{}]",
                  magic_number[0] as char,
                  magic_number[1] as char,
                  magic_number[2] as char,
                  magic_number[3] as char,
                 );
-        println!("validate_magic_number:{}", self.header.validate_magic_number());
-        println!("prg_page_count:{}", self.header.prg_page_count);
-        println!("chr_page_count:{}", self.header.chr_page_count);
-        println!("mapper_no:{}", self.header.mapper_no());
-        println!("flags6:{}", self.header.flags6);
-        println!("PRG Len:{}", self.prg.len());
-        println!("CHR Len:{}", self.chr.len());
+        info!("validate_magic_number:{}", self.header.validate_magic_number());
+        info!("prg_page_count:{}", self.header.prg_page_count);
+        info!("chr_page_count:{}", self.header.chr_page_count);
+        info!("mapper_no:{}", self.header.mapper_no());
+        info!("flags6:{}", self.header.flags6);
+        info!("PRG Len:{}", self.prg.len());
+        info!("CHR Len:{}", self.chr.len());
     }
 
     pub fn read(&self, addr: u16) -> u8 {

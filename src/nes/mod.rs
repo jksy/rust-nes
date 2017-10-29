@@ -59,9 +59,10 @@ impl Nes {
         }
     }
 
+    #[inline(always)]
     pub fn tick(&mut self) {
         {
-            // println!("ppu.tick()");
+            // info!("ppu.tick()");
             let mut ppu = self.ppu.borrow_mut();
             ppu.tick();
             ppu.tick();

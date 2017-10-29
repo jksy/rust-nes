@@ -2,6 +2,8 @@ mod nes;
 
 extern crate sdl2;
 extern crate bmp;
+#[macro_use]
+extern crate log;
 
 use nes::rom::Rom;
 use nes::Nes;
@@ -19,7 +21,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
-
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
@@ -50,8 +51,10 @@ fn main() {
     let mut texture = creator.
         create_texture_streaming(PixelFormatEnum::RGB888, 256, 240).unwrap();
 
-    let mut slow = true;
+    let mut slow = false;
     let mut prev_render_time = SystemTime::now();
+    let mut prev_keyboard_time = SystemTime::now();
+    let mut button_state = 0u8;
 
     'running: loop {
         for event in events.poll_iter() {
@@ -65,34 +68,36 @@ fn main() {
                 },
                 _ => {}
             }
-            println!("event:{:?}", event);
+            info!("event:{:?}", event);
         }
 
-        let keys:HashSet<Keycode> = events.
-            keyboard_state().
-            pressed_scancodes().
-            filter_map(Keycode::from_scancode).
-            collect();
+        info!("keyboard elapsed {:?}", prev_keyboard_time.elapsed().unwrap().as_secs());
+        if prev_keyboard_time.elapsed().unwrap().as_secs() >= 1 {
+            let keys:HashSet<Keycode> = events.
+                keyboard_state().
+                pressed_scancodes().
+                filter_map(Keycode::from_scancode).
+                collect();
 
-        let mut button = 0u8;
-        {
-            for key in keys {
-                match key {
-                    Keycode::Up     => {button |= joypad::BUTTON_UP},
-                    Keycode::Down   => {button |= joypad::BUTTON_DOWN},
-                    Keycode::Left   => {button |= joypad::BUTTON_LEFT},
-                    Keycode::Right  => {button |= joypad::BUTTON_RIGHT},
-                    Keycode::Space  => {button |= joypad::BUTTON_SELECT},
-                    Keycode::Return => {button |= joypad::BUTTON_START},
-                    Keycode::A      => {button |= joypad::BUTTON_A},
-                    Keycode::B      => {button |= joypad::BUTTON_B},
-                    _ => {},
+            {
+                for key in keys {
+                    match key {
+                        Keycode::Up     => {button_state |= joypad::BUTTON_UP},
+                        Keycode::Down   => {button_state |= joypad::BUTTON_DOWN},
+                        Keycode::Left   => {button_state |= joypad::BUTTON_LEFT},
+                        Keycode::Right  => {button_state |= joypad::BUTTON_RIGHT},
+                        Keycode::Space  => {button_state |= joypad::BUTTON_SELECT},
+                        Keycode::Return => {button_state |= joypad::BUTTON_START},
+                        Keycode::A      => {button_state |= joypad::BUTTON_A},
+                        Keycode::B      => {button_state |= joypad::BUTTON_B},
+                        _ => {},
+                    }
                 }
             }
+            prev_keyboard_time = SystemTime::now();
         }
-        nes.set_joypad_button_state(button);
 
-
+        nes.set_joypad_button_state(button_state);
         nes.tick();
 
         if slow {
@@ -111,7 +116,7 @@ fn main() {
         }
         prev_render_time = SystemTime::now();
 
-        println!("========== draw image ===============");
+        info!("========== draw image ===============");
 
         // draw nes display
         let mut img = Image::new(256, 240);

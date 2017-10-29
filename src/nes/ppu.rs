@@ -7,6 +7,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::Sender;
 
+
 #[derive(Clone)]
 pub struct Ppu {
     // PPU register
@@ -85,8 +86,8 @@ impl Ppu {
     }
 
     pub fn tick(&mut self) {
-        // println!("=====PPU Tick:{}", self.tick);
-        // println!("self.current_line = {}, self.current_cycle = {}", self.current_line, self.current_cycle);
+        // info!("=====PPU Tick:{}", self.tick);
+        // info!("self.current_line = {}, self.current_cycle = {}", self.current_line, self.current_cycle);
         self.tick = self.tick.overflowing_add(1).0;
         self.process_cycle();
 
@@ -97,7 +98,7 @@ impl Ppu {
 
     fn print_bg_name_table<'a>(&self) {
         let addr = self.name_table_addr();
-        println!("======== BG NAME TABLE({:04x}) =====", addr);
+        info!("======== BG NAME TABLE({:04x}) =====", addr);
 
         self.dump_vram();
     }
@@ -122,7 +123,7 @@ impl Ppu {
         for y in 0..30 {
             for x in 0..32 {
                 let address = self.name_table_addr() + x + y * 32;
-                // println!("address:{:04x}", address);
+                // info!("address:{:04x}", address);
                 let sprite_index = self.vram[address as usize] as u16;
                 let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
                 let tail_addr = head_addr + 16;
@@ -247,7 +248,7 @@ impl Ppu {
             0x2005 => {
                 self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
-                println!("PPU scroll position:{:x},{:x}",
+                info!("PPU scroll position:{:x},{:x}",
                          self.scroll_position[0],
                          self.scroll_position[1],
                          );
@@ -256,7 +257,7 @@ impl Ppu {
             0x2006 => {
                 self.vram_write_addr.insert(0, data);
                 self.vram_write_addr.truncate(2);
-                println!("PPU vram write addr:{:x},{:x}",
+                info!("PPU vram write addr:{:x},{:x}",
                          self.vram_write_addr[0],
                          self.vram_write_addr[1],
                          );
@@ -264,7 +265,7 @@ impl Ppu {
             0x2007 => {
                 let mut address = self.vram_write_addr[0] as u16;
                 address |= (self.vram_write_addr[1] as u16) << 8;
-                println!("write PPU:vram[{:x}] = {:x}", address, data);
+                info!("write PPU:vram[{:x}] = {:x}", address, data);
                 self.vram[address as usize] = data;
 
                 address += self.nametable_increment_value();
@@ -321,7 +322,7 @@ impl<'a> Sprite<'a> {
     pub fn pal_index(&self, x: u8, y: u8) -> u8 {
         let low = self.low[y as usize] << x & 0x80;
         let high = self.high[y as usize] << x & 0x80;
-        // println!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
+        // info!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
         //          x, y,
         //          self.low[y as usize],
         //          self.high[y as usize],
