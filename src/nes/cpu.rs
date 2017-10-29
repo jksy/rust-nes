@@ -356,12 +356,13 @@ impl Cpu {
     }
     fn asl<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ASL");
-        let carry = (self.a & 0x80) == 0x80;
-        let result = self.a.wrapping_shl(1);
+        let target = addr.read(self);
+        let carry = (target & 0x80) == 0x80;
+        let result = target.wrapping_shl(1);
         self.set_flag(FLAG_CRY, carry);
         self.set_negative_flag(result);
         self.set_zero_flag(result);
-        self.a = result;
+        addr.write(self, result);
         self.pc += addr.length();
         true
     }
@@ -372,7 +373,6 @@ impl Cpu {
         self.set_zero_flag(result);
         self.set_negative_flag(operand);
         self.set_flag(FLAG_OVF, (operand & 0x40) == 0x40);
-        self.a = result;
         self.pc += addr.length();
         true
     }
@@ -448,12 +448,13 @@ impl Cpu {
     }
     fn lsr<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:LSR");
-        let carry = (self.a & 0x01) == 0x01;
-        let result = self.a.wrapping_shr(1);
+        let target = addr.read(self);
+        let carry = (target & 0x01) == 0x01;
+        let result = target.wrapping_shr(1);
         self.set_flag(FLAG_CRY, carry);
         self.set_zero_flag(result);
         self.set_negative_flag(result);
-        self.a = result;
+        addr.write(self, result);
         self.pc += addr.length();
         true
     }
