@@ -679,9 +679,13 @@ impl Cpu {
     }
 
     fn indirecty(&mut self) -> MemoryAddressingMode {
-        let arg = self.read(self.pc) as u16;
-        let addr = self.read16(arg).wrapping_add(self.y as u16);
-        MemoryAddressingMode::new(addr, 1)
+        let operand = self.read(self.pc) as u16;
+        let y = self.y as u16;
+        let low_addr  = operand;
+        let high_addr = (operand + 1) & 0xFF;
+        let low  = self.read(low_addr) as u16;
+        let high = (self.read(high_addr) as u16) << 8;
+        MemoryAddressingMode::new(low.wrapping_add(high).wrapping_add(y), 1)
     }
 
     fn zeropage(&mut self) -> MemoryAddressingMode {
@@ -690,12 +694,14 @@ impl Cpu {
     }
 
     fn zeropagex(&mut self) -> MemoryAddressingMode {
-        let addr = ((self.pc + self.x as u16) & 0xFF) as u16;
+        let operand = self.read(self.pc);
+        let addr = operand.wrapping_add(self.x) as u16;
         MemoryAddressingMode::new(addr, 1)
     }
 
     fn zeropagey(&mut self) -> MemoryAddressingMode {
-        let addr = ((self.pc + self.y as u16) & 0xFF) as u16;
+        let operand = self.read(self.pc);
+        let addr = operand.wrapping_add(self.y) as u16;
         MemoryAddressingMode::new(addr, 1)
     }
 
