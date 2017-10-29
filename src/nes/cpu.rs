@@ -356,8 +356,8 @@ impl Cpu {
     }
     fn asl<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:ASL");
-        let carry = (self.a & 0x80) != 0;
-        let result = self.a << 1;
+        let carry = (self.a & 0x80) == 0x80;
+        let result = self.a.wrapping_shl(1);
         self.set_flag(FLAG_CRY, carry);
         self.set_negative_flag(result);
         self.set_zero_flag(result);
@@ -690,12 +690,12 @@ impl Cpu {
     }
 
     fn zeropagex(&mut self) -> MemoryAddressingMode {
-        let addr = ((self.pc + self.x as u16) | 0xFF) as u16;
+        let addr = ((self.pc + self.x as u16) & 0xFF) as u16;
         MemoryAddressingMode::new(addr, 1)
     }
 
     fn zeropagey(&mut self) -> MemoryAddressingMode {
-        let addr = ((self.pc + self.y as u16) | 0xFF) as u16;
+        let addr = ((self.pc + self.y as u16) & 0xFF) as u16;
         MemoryAddressingMode::new(addr, 1)
     }
 
