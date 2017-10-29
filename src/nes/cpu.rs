@@ -361,7 +361,6 @@ impl Cpu {
         self.set_flag(FLAG_CRY, carry);
         self.set_negative_flag(result);
         self.set_zero_flag(result);
-
         self.a = result;
         self.pc += addr.length();
         true
@@ -449,11 +448,11 @@ impl Cpu {
     }
     fn lsr<T:AddressingMode>(&mut self, addr: T) -> bool {
         println!("opcode:LSR");
-        let carry = (self.a & 0x01) != 0;
+        let carry = (self.a & 0x01) == 0x01;
+        let result = self.a.wrapping_shr(1);
         self.set_flag(FLAG_CRY, carry);
-        let result = self.a >> 1;
-        self.set_flag(FLAG_ZER, result == 0);
-        self.set_flag(FLAG_NEG, (result & 0x80) != 0);
+        self.set_zero_flag(result);
+        self.set_negative_flag(result);
         self.a = result;
         self.pc += addr.length();
         true
