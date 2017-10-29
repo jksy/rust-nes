@@ -669,14 +669,17 @@ impl Cpu {
 
     fn indirectx(&mut self) -> MemoryAddressingMode {
         let operand = self.read(self.pc) as u16;
-        // let addr = self.read16bug(operand);
-        let addr = (self.read16(operand) + self.x as u16) & 0x00FF;
-        MemoryAddressingMode::new(addr, 1)
+        let x = self.x as u16;
+        let low_addr   = (operand + x) & 0xFF;
+        let high_addr  = (operand + x + 1) & 0xFF;
+        let low = self.read(low_addr) as u16;
+        let high = (self.read(high_addr) as u16) << 8;
+
+        MemoryAddressingMode::new(low + high, 1)
     }
 
     fn indirecty(&mut self) -> MemoryAddressingMode {
         let arg = self.read(self.pc) as u16;
-        // let addr = self.read16bug(arg) + self.y as u16;
         let addr = self.read16(arg).wrapping_add(self.y as u16);
         MemoryAddressingMode::new(addr, 1)
     }
@@ -1035,16 +1038,6 @@ impl Cpu {
 
     fn read16(&self, addr: u16) -> u16 {
         self.mbc.borrow_mut().read16(addr)
-    }
-
-    fn read16bug(&self, addr: u16) -> u16 {
-        println!("read16bug({:x})", addr);
-        let a = addr;
-        let b = (a & 0xFF00u16) | (((a & 0x00FFu16) + 1) & 0x00FF);
-        let low = self.read(a) as u16;
-        let high = self.read(b) as u16;
-        println!("high:{:x}, low:{:x}", high, low);
-        high << 8 | low
     }
 
     fn write(&mut self, addr: u16, data: u8) {
