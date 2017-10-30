@@ -37,6 +37,73 @@ pub struct Ppu {
     is_display_changed: bool,
 }
 
+const PALLETE: [[u8;3]; 64] = [
+    [0x7Cu8, 0x7Cu8, 0x7Cu8],
+    [0x00u8, 0x00u8, 0xFCu8],
+    [0x00u8, 0x00u8, 0xBCu8],
+    [0x44u8, 0x28u8, 0xBCu8],
+    [0x94u8, 0x00u8, 0x84u8],
+    [0xA8u8, 0x00u8, 0x20u8],
+    [0xA8u8, 0x10u8, 0x00u8],
+    [0x88u8, 0x14u8, 0x00u8],
+    [0x50u8, 0x30u8, 0x00u8],
+    [0x00u8, 0x78u8, 0x00u8],
+    [0x00u8, 0x68u8, 0x00u8],
+    [0x00u8, 0x58u8, 0x00u8],
+    [0x00u8, 0x40u8, 0x58u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0xBCu8, 0xBCu8, 0xBCu8],
+    [0x00u8, 0x78u8, 0xF8u8],
+    [0x00u8, 0x58u8, 0xF8u8],
+    [0x68u8, 0x44u8, 0xFCu8],
+    [0xD8u8, 0x00u8, 0xCCu8],
+    [0xE4u8, 0x00u8, 0x58u8],
+    [0xF8u8, 0x38u8, 0x00u8],
+    [0xE4u8, 0x5Cu8, 0x10u8],
+    [0xACu8, 0x7Cu8, 0x00u8],
+    [0x00u8, 0xB8u8, 0x00u8],
+    [0x00u8, 0xA8u8, 0x00u8],
+    [0x00u8, 0xA8u8, 0x44u8],
+    [0x00u8, 0x88u8, 0x88u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0xF8u8, 0xF8u8, 0xF8u8],
+    [0x3Cu8, 0xBCu8, 0xFCu8],
+    [0x68u8, 0x88u8, 0xFCu8],
+    [0x98u8, 0x78u8, 0xF8u8],
+    [0xF8u8, 0x78u8, 0xF8u8],
+    [0xF8u8, 0x58u8, 0x98u8],
+    [0xF8u8, 0x78u8, 0x58u8],
+    [0xFCu8, 0xA0u8, 0x44u8],
+    [0xF8u8, 0xB8u8, 0x00u8],
+    [0xB8u8, 0xF8u8, 0x18u8],
+    [0x58u8, 0xD8u8, 0x54u8],
+    [0x58u8, 0xF8u8, 0x98u8],
+    [0x00u8, 0xE8u8, 0xD8u8],
+    [0x78u8, 0x78u8, 0x78u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0xFCu8, 0xFCu8, 0xFCu8],
+    [0xA4u8, 0xE4u8, 0xFCu8],
+    [0xB8u8, 0xB8u8, 0xF8u8],
+    [0xD8u8, 0xB8u8, 0xF8u8],
+    [0xF8u8, 0xB8u8, 0xF8u8],
+    [0xF8u8, 0xA4u8, 0xC0u8],
+    [0xF0u8, 0xD0u8, 0xB0u8],
+    [0xFCu8, 0xE0u8, 0xA8u8],
+    [0xF8u8, 0xD8u8, 0x78u8],
+    [0xD8u8, 0xF8u8, 0x78u8],
+    [0xB8u8, 0xF8u8, 0xB8u8],
+    [0xB8u8, 0xF8u8, 0xD8u8],
+    [0x00u8, 0xFCu8, 0xFCu8],
+    [0xF8u8, 0xD8u8, 0xF8u8],
+    [0x00u8, 0x00u8, 0x00u8],
+    [0x00u8, 0x00u8, 0x00u8],
+];
+
 const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
 const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
@@ -111,18 +178,13 @@ impl Ppu {
         // let mut img = Image::new(256, 240);
         // let pal = [0x31u8, 0x21u8, 0x11u8, 0x01u8];
         //
-        let pal = [[0xFFu8, 0xFFu8, 0xFFu8],
-                   [0x00u8, 0x00u8, 0xFFu8],
-                   [0x00u8, 0xFFu8, 0x00u8],
-                   [0xFFu8, 0x00u8, 0x00u8],
-                   [0x00u8, 0x00u8, 0x00u8],
-            ];
+        let pal = PALLETE;
 
-
+        let name_table_addr = self.name_table_addr();
         let mapper = self.mapper.borrow();
         for y in 0..30 {
             for x in 0..32 {
-                let address = self.name_table_addr() + x + y * 32;
+                let address = name_table_addr + x + y * 32;
                 // info!("address:{:04x}", address);
                 let sprite_index = self.vram[address as usize] as u16;
                 let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
@@ -136,7 +198,18 @@ impl Ppu {
                 for pix_x in 0..8 {
                     for pix_y in 0..8 {
                         let index = sprite.pal_index(pix_x as u8, pix_y as u8) as usize;
-                        let pixel = Pixel::new(pal[index][0], pal[index][1], pal[index][2]);
+                        // color pallete address
+                        // BG1 0x3F00-0x3F03
+                        // BG2 0x3F04-0x3F07
+                        // BG3 0x3F08-0x3F0B
+                        // BG4 0x3F0C-0x3F0F
+                        // OBJ1 0x3F10-0x3F13
+                        // OBJ2 0x3F14-0x3F17
+                        // OBJ3 0x3F18-0x3F1B
+                        // OBJ4 0x3F1C-0x3F1F
+                        let pal_index = self.vram[0x3f00usize + index] as usize;
+                        let color = pal[pal_index];
+                        let pixel = Pixel::new(color[0], color[1], color[2]);
                         let x = base_x + pix_x;
                         let y = base_y + pix_y;
                         img.set_pixel(x as u32, y as u32, pixel);
@@ -322,12 +395,6 @@ impl<'a> Sprite<'a> {
     pub fn pal_index(&self, x: u8, y: u8) -> u8 {
         let low = self.low[y as usize] << x & 0x80;
         let high = self.high[y as usize] << x & 0x80;
-        // info!("pal_index(x:{:x}, y:{:x}) self.low:{:x}, self.high{:x}, low:{:x},high:{:x}",
-        //          x, y,
-        //          self.low[y as usize],
-        //          self.high[y as usize],
-        //          low,
-        //          high );
         low >> 7 | high >> 6
     }
 
