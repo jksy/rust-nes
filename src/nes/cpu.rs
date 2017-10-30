@@ -724,7 +724,6 @@ impl Cpu {
         MemoryAddressingMode::new(addr, 2)
     }
 
-    #[inline(always)]
     pub fn tick(&mut self) {
         self.step += 1;
         self.debug();
@@ -741,6 +740,12 @@ impl Cpu {
         let opcode = self.read(self.pc);
         self.pc += 1;
 
+        self.process_opcode(opcode);
+
+        self.print_diff(before_status);
+    }
+
+    fn process_opcode(&mut self, opcode: u8) {
         let cont = match opcode {
             0x00 => {let m = self.implicit();    self.brk(m) },
             0x01 => {let m = self.indirectx();   self.ora(m) },
@@ -1000,9 +1005,6 @@ impl Cpu {
             0xFF => {let m = self.absolutex();   self.isc(m) },
             _ => panic!("none opcode:{:x}", opcode)
         };
-
-        self.print_diff(before_status);
-
     }
 
     fn print_diff(&self, before: Cpu) {

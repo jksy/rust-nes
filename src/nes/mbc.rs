@@ -37,7 +37,6 @@ impl Mbc {
         self.mapper.borrow().initial_pc()
     }
 
-    #[inline(always)]
     pub fn read(&self, addr: u16) -> u8 {
         let x = match addr {
             0x0000u16...0x1FFFu16 => self.ram[(addr & !0x0800) as usize],

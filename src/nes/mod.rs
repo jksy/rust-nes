@@ -59,7 +59,6 @@ impl Nes {
         }
     }
 
-    #[inline(always)]
     pub fn tick(&mut self) {
         {
             // info!("ppu.tick()");
