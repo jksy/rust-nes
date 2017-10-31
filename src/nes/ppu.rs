@@ -106,7 +106,7 @@ const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
 const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
 const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
-const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
+const CONTROL_MASK_PATTEN_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
 const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
 const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
 
@@ -185,18 +185,18 @@ impl Ppu {
             for x in 0..32 {
                 let address = name_table_addr + x + y * 32;
                 // info!("address:{:04x}", address);
-                let sprite_index = self.vram[address as usize] as u16;
-                let head_addr = (self.sprite_addr() + sprite_index * 2 * 8) as usize;
+                let patten_index = self.vram[address as usize] as u16;
+                let head_addr = (self.patten_addr() + patten_index * 2 * 8) as usize;
                 let tail_addr = head_addr + 16;
                 let memory = &mapper.chr_rom()[head_addr..tail_addr];
-                let sprite = Sprite::new(memory);
+                let patten = Pattern::new(memory);
 
-                // draw BG sprite
+                // draw BG patten
                 let base_x = x * 8;
                 let base_y = y * 8;
                 for pix_x in 0..8 {
                     for pix_y in 0..8 {
-                        let index = sprite.pal_index(pix_x as u8, pix_y as u8) as usize;
+                        let index = patten.pal_index(pix_x as u8, pix_y as u8) as usize;
                         // color pallete address
                         // BG1 0x3F00-0x3F03
                         // BG2 0x3F04-0x3F07
@@ -274,8 +274,8 @@ impl Ppu {
         }
     }
 
-    fn sprite_addr(&self) -> u16 {
-        if (self.control & CONTROL_MASK_SPRITE_ADDRESS) != 0 {
+    fn patten_addr(&self) -> u16 {
+        if (self.control & CONTROL_MASK_PATTEN_ADDRESS) != 0 {
             0x1000u16
         } else {
             0x0000u16
@@ -391,14 +391,14 @@ impl Ppu {
     }
 }
 
-struct Sprite<'a> {
+struct Pattern<'a> {
     low:  &'a [u8],
     high: &'a [u8],
 }
 
-impl<'a> Sprite<'a> {
+impl<'a> Pattern<'a> {
     fn new(data: &'a [u8]) -> Self {
-        Sprite{low: &data[0..8], high: &data[8..16]}
+        Pattern{low: &data[0..8], high: &data[8..16]}
     }
 
     pub fn pal_index(&self, x: u8, y: u8) -> u8 {
