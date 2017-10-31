@@ -25,6 +25,8 @@ pub struct Ppu {
                      // 0x2800-0x2BFF:Name table3
                      // 0x2C00-0x2FFF:Name table4
                      // 0x3F00-0x3F1F:Pallete
+    oam_ram: Vec<u8>,
+
     mapper: Rc<RefCell<Box<Mapper>>>,
     tick: u64,
     current_line: u16,
@@ -139,7 +141,8 @@ impl Ppu {
             vram_data:     0u8,
             oam_dma:       0u8,
             mapper:        mapper,
-            vram:          vec![0x00u8; 0xFFFF],
+            vram:          vec![0x00u8; 0x3FFF],
+            oam_ram:       vec![0x00u8; 0x00FF],
             tick:          0u64,
             current_line: 0,
             current_cycle: 0,
@@ -165,7 +168,7 @@ impl Ppu {
         let addr = self.name_table_addr();
         info!("======== BG NAME TABLE({:04x}) =====", addr);
 
-        self.dump_vram();
+        self.dump_memory();
     }
 
     pub fn renderable(&self) -> bool {
@@ -218,9 +221,15 @@ impl Ppu {
         }
     }
 
-    fn dump_vram(&self) {
+    fn render_sprite(&self, img: &mut Image) {
+
+    }
+
+    fn dump_memory(&self) {
         let mut file = File::create("vram.dmp").unwrap();
         let _ = file.write_all(&self.vram).unwrap();
+        let mut file = File::create("oam_ram.dmp").unwrap();
+        let _ = file.write_all(&self.oam_ram).unwrap();
     }
 
     fn process_cycle(&mut self) {
@@ -347,11 +356,11 @@ impl Ppu {
             0x4014 => {
                 let source = (data as u16) << 8;
                 let target = self.oam_address as u16;
-                for i in 0..0x100u16 {
+                for i in 0..0xFFu16 {
                     let s = (source + i) as u16;
                     let t = (target + i) as usize;
-                    self.vram[t] = self.mapper.borrow().read(s);
-                    info!("self.vram[0x{:04x}] = self.mapper.borrow().read(0x{:04x})", t, s);
+                    self.oam_ram[t] = self.mapper.borrow().read(s);
+                    info!("self.oam_ram[0x{:04x}] = self.mapper.borrow().read(0x{:04x})", t, s);
                 }
                 self.is_display_changed = true;
             },
