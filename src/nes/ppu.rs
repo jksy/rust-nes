@@ -7,8 +7,6 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::sync::mpsc::Sender;
 
-
-#[derive(Clone)]
 pub struct Ppu {
     // PPU register
     control: u8,     // $2000(w)
@@ -295,6 +293,7 @@ impl Ppu {
     }
 
     pub fn read(&self, addr: u16) -> u8 {
+        info!("PPU read:{:04x}", addr);
         match addr {
             0x2002 => self.status,
             0x2004 => self.oam_data,
@@ -316,7 +315,9 @@ impl Ppu {
                 self.mask = data;
                 self.is_display_changed = true
             },
-            // 0x2003 => self.oam_address = data,
+            0x2003 => {
+                self.oam_address = data
+            },
             // 0x2004 => self.oam_data = data,
             0x2005 => {
                 self.scroll_position.insert(0, data);
@@ -330,9 +331,9 @@ impl Ppu {
             0x2006 => {
                 self.vram_write_addr.insert(0, data);
                 self.vram_write_addr.truncate(2);
-                info!("PPU vram write addr:{:x},{:x}",
-                         self.vram_write_addr[0],
+                info!("set write addr for PPU vram: 0x{:02x}{:02x}",
                          self.vram_write_addr[1],
+                         self.vram_write_addr[0],
                          );
             },
             0x2007 => {
@@ -344,6 +345,17 @@ impl Ppu {
                 address += self.nametable_increment_value();
                 self.vram_write_addr[0] = (address & 0xFF) as u8;
                 self.vram_write_addr[1] = (address >> 8) as u8;
+                self.is_display_changed = true;
+            },
+            0x4014 => {
+                let source = (data as u16) << 8;
+                let target = self.oam_address as u16;
+                for i in 0..0x100u16 {
+                    let s = (source + i) as u16;
+                    let t = (target + i) as usize;
+                    self.vram[t] = self.mapper.borrow().read(s);
+                    info!("self.vram[0x{:04x}] = self.mapper.borrow().read(0x{:04x})", t, s);
+                }
                 self.is_display_changed = true;
             },
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
@@ -382,7 +394,7 @@ impl Ppu {
     }
 }
 
-pub struct Sprite<'a> {
+struct Sprite<'a> {
     low:  &'a [u8],
     high: &'a [u8],
 }
@@ -397,6 +409,4 @@ impl<'a> Sprite<'a> {
         let high = self.high[y as usize] << x & 0x80;
         low >> 7 | high >> 6
     }
-
 }
-

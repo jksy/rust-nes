@@ -4,6 +4,7 @@ extern crate sdl2;
 extern crate bmp;
 #[macro_use]
 extern crate log;
+extern crate env_logger;
 
 use nes::rom::Rom;
 use nes::Nes;
@@ -25,6 +26,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
+    env_logger::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
@@ -46,7 +48,10 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut nes = Nes::new();
+    // let rom = Rom::load("color_test.nes").unwrap();
     let rom = Rom::load("nestest.nes").unwrap();
+    // let rom = Rom::load("ram_retain.nes").unwrap();
+    // let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
     rom.print();
     nes.set_rom(rom.clone());
     nes.reset();

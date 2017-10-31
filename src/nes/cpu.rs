@@ -734,9 +734,6 @@ impl Cpu {
 
         let before_status = self.clone();
 
-        // if self.pc < 0xc000 {
-        //     panic!("== invalidate pc:${:x}", self.pc);
-        // }
         let opcode = self.read(self.pc);
         self.pc += 1;
 
@@ -1058,7 +1055,7 @@ impl Cpu {
         let addr = self.s as u16 + 0x0100;
         info!("push(addr => {:x}, data => {:x})", addr, data);
         self.mbc.borrow_mut().write(addr, data);
-        self.s -= 1;
+        self.s = self.s.wrapping_sub(1);
     }
 
     fn push16(&mut self, data: u16) {
@@ -1070,7 +1067,7 @@ impl Cpu {
     }
 
     fn pop(&mut self) -> u8 {
-        self.s += 1;
+        self.s = self.s.wrapping_add(1);
         let addr = (self.s as u16) + 0x0100;
         let data = self.mbc.borrow_mut().read(addr);
         // info!("pop(addr => {:x}, data => {:x})", addr, data);
