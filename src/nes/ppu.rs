@@ -173,9 +173,10 @@ impl Ppu {
     }
 
     pub fn render_image(&self, img: &mut Image) {
-        // let mut img = Image::new(256, 240);
-        // let pal = [0x31u8, 0x21u8, 0x11u8, 0x01u8];
-        //
+        self.render_bg(img);
+    }
+
+    fn render_bg(&self, img: &mut Image) {
         let pal = PALLETE;
 
         let name_table_addr = self.name_table_addr();
@@ -215,10 +216,6 @@ impl Ppu {
                 }
             }
         }
-        // let _ = img.save("bg.bmp").unwrap();
-        // if self.renderer.is_some() {
-        //     let _ = &self.renderer.as_ref().unwrap().send(img);
-        // }
     }
 
     fn dump_vram(&self) {
