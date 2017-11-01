@@ -48,6 +48,7 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut nes = Nes::new();
+    // let rom = Rom::load("power_up_palette.nes").unwrap();
     // let rom = Rom::load("color_test.nes").unwrap();
     let rom = Rom::load("nestest.nes").unwrap();
     // let rom = Rom::load("ram_retain.nes").unwrap();
@@ -87,7 +88,6 @@ fn main() {
         }
 
         if button_state_changed {
-            info!("getting button state");
             button_state = get_button_state(&events);
             button_state_changed = false;
         }
@@ -117,6 +117,8 @@ fn main() {
         // draw nes display
         nes.clear_display_changed();
         prev_render_time = SystemTime::now();
+        // dumping ram & ppu
+        nes.dump();
     }
 }
 

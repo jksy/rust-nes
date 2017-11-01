@@ -92,7 +92,7 @@ impl Rom {
         info!("CHR Len:{}", self.chr.len());
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn read_prg(&self, addr: u16) -> u8 {
         if self.header.prg_page_count == 1 {
             let x = addr & 0x3FFF;
             self.prg[x as usize]

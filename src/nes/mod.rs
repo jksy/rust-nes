@@ -40,7 +40,7 @@ macro_rules !wrap_with_rc {
 impl Nes {
     pub fn new() -> Self {
         let mapper = wrap_with_rc!(Mapper::new());
-        let ppu    = wrap_with_rc!(Ppu::new(mapper.clone()));
+        let ppu    = wrap_with_rc!(Ppu::new(Rc::downgrade(&mapper)));
         let joypad = wrap_with_rc!(Joypad::new());
         let mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
         let cpu = Cpu::new(mbc.clone());
@@ -57,6 +57,11 @@ impl Nes {
         loop {
             self.tick();
         }
+    }
+
+    pub fn dump(&self) {
+        self.mbc.borrow_mut().dump_ram();
+        self.ppu.borrow_mut().dump();
     }
 
     pub fn tick(&mut self) {

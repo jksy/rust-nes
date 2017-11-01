@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::rc::Rc;
+use std::rc::Weak;
 use nes::mapper::Mapper;
 use nes::bmp::Image;
 use nes::bmp::Pixel;
@@ -13,10 +13,8 @@ pub struct Ppu {
     mask: u8,        // $2001(w)
     status: u8,      // $2002(r)
     oam_address: u8, // $2003(w)
-    oam_data: u8,    // $2004(r/w)
     scroll: u8,      // $2005(w*2)
     vram_addr: u8,   // $2006(w*2)
-    vram_data: u8,   // $2007(r/w)
     oam_dma: u8,     // $4014(w)
     vram: Vec<u8>,   // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
                      // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
@@ -25,9 +23,8 @@ pub struct Ppu {
                      // 0x2800-0x2BFF:Name table3
                      // 0x2C00-0x2FFF:Name table4
                      // 0x3F00-0x3F1F:Pallete
-    oam_ram: Vec<u8>,
-
-    mapper: Rc<RefCell<Box<Mapper>>>,
+    oam_ram: Vec<u8>, // for sprites
+    mapper: Weak<RefCell<Box<Mapper>>>,
     tick: u64,
     current_line: u16,
     current_cycle: u16,
@@ -37,7 +34,7 @@ pub struct Ppu {
     is_display_changed: bool,
 }
 
-const PALLETE: [[u8;3]; 64] = [
+const PALETTES: [[u8;3]; 64] = [
     [0x7Cu8, 0x7Cu8, 0x7Cu8],
     [0x00u8, 0x00u8, 0xFCu8],
     [0x00u8, 0x00u8, 0xBCu8],
@@ -108,7 +105,7 @@ const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
 const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
 const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
-const CONTROL_MASK_PATTEN_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
+const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
 const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
 const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
 
@@ -129,103 +126,103 @@ const STATUS_VBLANK   : u8 = 0x80u8;
 #[allow(dead_code)] const MASK_EMP_BLUE                 :u8 = 0x80u8;
 
 impl Ppu {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
+    pub fn new(mapper: Weak<RefCell<Box<Mapper>>>) -> Self {
         Ppu{
             control:       0u8,
             mask:          0u8,
             status:        0u8,
             oam_address:   0u8,
-            oam_data:      0u8,
             scroll:        0u8,
             vram_addr:     0u8,
-            vram_data:     0u8,
             oam_dma:       0u8,
             mapper:        mapper,
-            vram:          vec![0x00u8; 0x3FFF],
-            oam_ram:       vec![0x00u8; 0x00FF],
+            vram:          vec![0x00u8; 0x4000],
+            oam_ram:       vec![0x00u8; 0x0100],
             tick:          0u64,
-            current_line: 0,
+            current_line:  0,
             current_cycle: 0,
-            vram_write_addr:          vec![0,0],
-            scroll_position:          vec![0,0],
+            vram_write_addr: vec![0,0],
+            scroll_position: vec![0,0],
             is_raise_nmi   : false,
             is_display_changed   : false,
         }
     }
 
     pub fn tick(&mut self) {
-        // info!("=====PPU Tick:{}", self.tick);
-        // info!("self.current_line = {}, self.current_cycle = {}", self.current_line, self.current_cycle);
         self.tick = self.tick.overflowing_add(1).0;
         self.process_cycle();
-
-        if self.current_line == 0 && self.current_cycle == 0 {
-            self.print_bg_name_table();
-        }
-    }
-
-    fn print_bg_name_table<'a>(&self) {
-        let addr = self.name_table_addr();
-        info!("======== BG NAME TABLE({:04x}) =====", addr);
-
-        self.dump_memory();
-    }
-
-    pub fn renderable(&self) -> bool {
-        self.current_line == 0 && self.current_cycle == 0
     }
 
     pub fn render_image(&self, img: &mut Image) {
         self.render_bg(img);
+        self.render_sprites(img);
     }
 
     fn render_bg(&self, img: &mut Image) {
-        let pal = PALLETE;
-
         let name_table_addr = self.name_table_addr();
-        let mapper = self.mapper.borrow();
         for y in 0..30 {
             for x in 0..32 {
                 let address = name_table_addr + x + y * 32;
-                // info!("address:{:04x}", address);
-                let patten_index = self.vram[address as usize] as u16;
-                let head_addr = (self.patten_addr() + patten_index * 2 * 8) as usize;
-                let tail_addr = head_addr + 16;
-                let memory = &mapper.chr_rom()[head_addr..tail_addr];
-                let patten = Pattern::new(memory);
-
-                // draw BG patten
-                let base_x = x * 8;
-                let base_y = y * 8;
-                for pix_x in 0..8 {
-                    for pix_y in 0..8 {
-                        let index = patten.pal_index(pix_x as u8, pix_y as u8) as usize;
-                        // color pallete address
-                        // BG1 0x3F00-0x3F03
-                        // BG2 0x3F04-0x3F07
-                        // BG3 0x3F08-0x3F0B
-                        // BG4 0x3F0C-0x3F0F
-                        // OBJ1 0x3F10-0x3F13
-                        // OBJ2 0x3F14-0x3F17
-                        // OBJ3 0x3F18-0x3F1B
-                        // OBJ4 0x3F1C-0x3F1F
-                        let pal_index = self.vram[0x3f00usize + index] as usize;
-                        let color = pal[pal_index];
-                        let pixel = Pixel::new(color[0], color[1], color[2]);
-                        let x = base_x + pix_x;
-                        let y = base_y + pix_y;
-                        img.set_pixel(x as u32, y as u32, pixel);
-                    }
-                }
+                let pattern_index = self.vram[address as usize] as u16;
+                self.render_pattern(img, x * 8, y * 8, pattern_index, 0x3f00);
             }
         }
     }
 
-    fn render_sprite(&self, img: &mut Image) {
+    fn render_sprites(&self, img: &mut Image) {
+        for sprite_index in 0..64 {
+            let y             = self.oam_ram[sprite_index * 4]     as u16;
+            let pattern_index = self.oam_ram[sprite_index * 4 + 1] as u16;
+            let attr          = self.oam_ram[sprite_index * 4 + 2] as u16;
+            let x             = self.oam_ram[sprite_index * 4 + 3] as u16;
 
+            self.render_pattern(img, x, y, pattern_index, 0x3F10);
+        }
     }
 
-    fn dump_memory(&self) {
+    fn render_pattern(&self,
+                      img: &mut Image,
+                      base_x: u16,
+                      base_y: u16,
+                      pattern_index: u16,
+                      palette_addr: u16) {
+        let head_addr = (self.pattern_addr() + pattern_index * 2 * 8) as usize;
+        let tail_addr = head_addr + 16;
+
+        let mapper = self.mapper.upgrade().unwrap();
+        let mapper = mapper.borrow();
+        let memory = &mapper.chr_rom()[head_addr..tail_addr];
+        let pattern = Pattern::new(memory);
+
+        // draw pattern
+        for pix_x in 0..8 {
+            for pix_y in 0..8 {
+                let x = (base_x + pix_x) as u32;
+                let y = (base_y + pix_y) as u32;
+                if x < 0 || y < 0 ||
+                   img.get_width() <= x ||
+                   img.get_height() <= y {
+                    continue;
+                }
+                let index = pattern.pal_index(pix_x as u8, pix_y as u8) as usize;
+                // color pallete address
+                // BG1 0x3F00-0x3F03
+                // BG2 0x3F04-0x3F07
+                // BG3 0x3F08-0x3F0B
+                // BG4 0x3F0C-0x3F0F
+                // OBJ1 0x3F10-0x3F13
+                // OBJ2 0x3F14-0x3F17
+                // OBJ3 0x3F18-0x3F1B
+                // OBJ4 0x3F1C-0x3F1F
+                let pal_index = self.vram[palette_addr as usize + index] as usize;
+                let color = PALETTES[pal_index];
+                let pixel = Pixel::new(color[0], color[1], color[2]);
+                img.set_pixel(x as u32, y as u32, pixel);
+            }
+        }
+    }
+
+    pub fn dump(&self) {
         let mut file = File::create("vram.dmp").unwrap();
         let _ = file.write_all(&self.vram).unwrap();
         let mut file = File::create("oam_ram.dmp").unwrap();
@@ -246,6 +243,11 @@ impl Ppu {
                 self.status &= !STATUS_VBLANK; // clar vblank flag
                 self.is_raise_nmi = false;
             }
+        }
+
+        // reset OAM address
+        if 257 <= self.current_line && self.current_line <= 320 {
+            self.oam_address = 0;
         }
 
         self.current_cycle += 1;
@@ -283,8 +285,8 @@ impl Ppu {
         }
     }
 
-    fn patten_addr(&self) -> u16 {
-        if (self.control & CONTROL_MASK_PATTEN_ADDRESS) != 0 {
+    fn pattern_addr(&self) -> u16 {
+        if (self.control & CONTROL_MASK_SPRITE_ADDRESS) != 0 {
             0x1000u16
         } else {
             0x0000u16
@@ -301,31 +303,44 @@ impl Ppu {
     pub fn read(&self, addr: u16) -> u8 {
         info!("PPU read:{:04x}", addr);
         match addr {
-            0x2002 => self.status,
-            0x2004 => self.oam_data,
-            0x2007 => self.vram_data,
+            0x2002 => { // PPU_STATUS
+                self.status
+            },
+            0x2004 => { // OAM_DATA
+                self.oam_ram[self.oam_address as usize]
+            },
+            0x2007 => { // PPU_DATA
+                self.vram[self.vram_addr as usize]
+            },
             _ => panic!("PPU read error:#{:x}", addr)
         }
     }
 
     pub fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x2000 => {
+            0x2000 => { // PPU_CTRL
                 self.control = data;
                 self.vram_write_addr.clear();
                 self.vram_write_addr.insert(0, 0);
                 self.vram_write_addr.insert(0, 0);
                 self.is_display_changed = true
             },
-            0x2001 => {
+            0x2001 => { // PPU_MASK
                 self.mask = data;
                 self.is_display_changed = true
             },
-            0x2003 => {
-                self.oam_address = data
+            0x2003 => { // OAM_ADDRESS
+                self.oam_address = data;
+                info!("PPU OAM write addr : 0x{:02x}", data);
             },
-            // 0x2004 => self.oam_data = data,
-            0x2005 => {
+            0x2004 => { // OAM_DATA
+                info!("PPU write oam_ram[{:02x}] = {:02x}",
+                      self.oam_address,
+                      data);
+                self.oam_ram[self.oam_address as usize] = data;
+                self.oam_address += 1
+            },
+            0x2005 => { // PPU_SCROLL
                 self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
                 info!("PPU scroll position:{:x},{:x}",
@@ -334,18 +349,18 @@ impl Ppu {
                          );
                 self.is_display_changed = true;
             },
-            0x2006 => {
+            0x2006 => { // PPU_ADDRESS
                 self.vram_write_addr.insert(0, data);
                 self.vram_write_addr.truncate(2);
-                info!("set write addr for PPU vram: 0x{:02x}{:02x}",
+                info!("PPU VRAM write addr : 0x{:02x}{:02x}",
                          self.vram_write_addr[1],
                          self.vram_write_addr[0],
                          );
             },
-            0x2007 => {
+            0x2007 => { // PPU_DATA
                 let mut address = self.vram_write_addr[0] as u16;
                 address |= (self.vram_write_addr[1] as u16) << 8;
-                info!("write PPU:vram[{:x}] = {:x}", address, data);
+                info!("PPU write vram[{:x}] = {:x}", address, data);
                 self.vram[address as usize] = data;
 
                 address += self.nametable_increment_value();
@@ -353,32 +368,29 @@ impl Ppu {
                 self.vram_write_addr[1] = (address >> 8) as u8;
                 self.is_display_changed = true;
             },
-            0x4014 => {
+            0x4014 => { // OAM_DMA
                 let source = (data as u16) << 8;
                 let target = self.oam_address as u16;
-                for i in 0..0xFFu16 {
+                info!("PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
+                      target,
+                      target + 0x0100u16,
+                      source,
+                      source + 0x0100u16);
+                for i in 0..0x100u16 {
                     let s = (source + i) as u16;
                     let t = (target + i) as usize;
-                    self.oam_ram[t] = self.mapper.borrow().read(s);
-                    info!("self.oam_ram[0x{:04x}] = self.mapper.borrow().read(0x{:04x})", t, s);
+                    let mapper = self.mapper.upgrade().unwrap();
+                    let v = mapper.borrow().read_prg(s); // TODO:read-memory
+                    self.oam_ram[t] = v;
+                    info!("oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
+                    t,
+                    s,
+                    v);
                 }
                 self.is_display_changed = true;
             },
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
         }
-    }
-
-    fn read_vram(&self, addr:u16) -> u8 {
-        match addr {
-            0x0000u16...0x1FFFu16 => {
-                let mapper = self.mapper.borrow();
-                mapper.chr_rom()[addr as usize]
-            },
-            _ => {
-                panic!();
-            },
-        }
-
     }
 
     pub fn is_enable_nmi(&self) -> bool {
