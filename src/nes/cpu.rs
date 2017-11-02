@@ -1034,9 +1034,6 @@ impl Cpu {
                  (self.p & FLAG_OVF) != 0,
                  (self.p & FLAG_NEG) != 0,
                  );
-        let addr = 0x00u16;
-        let test_result = self.read(addr);
-        info!("test_result:0x{:x}", test_result);
     }
 
     fn read(&self, addr: u16) -> u8 {

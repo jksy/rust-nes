@@ -277,6 +277,14 @@ impl Ppu {
             }
         }
 
+        // if 0 < self.current_line && self.current_line < 8 {
+        //     if 0 < self.current_cycle && self.current_cycle < 8 {
+        //         self.mask |= STATUS_SPRITE;
+        //     }
+        // } else {
+        //     self.mask &= !STATUS_SPRITE;
+        // }
+
     }
 
     fn process_pixel(&mut self) {
@@ -323,6 +331,9 @@ impl Ppu {
         match addr {
             0x2002 => { // PPU_STATUS
                 self.status
+            },
+            0x2003 => { // OAM_ADDDRESS
+                self.oam_address
             },
             0x2004 => { // OAM_DATA
                 self.oam_ram[self.oam_address as usize]
