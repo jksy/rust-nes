@@ -1,11 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Weak;
 use nes::mapper::Mapper;
+use nes::mbc::Mbc;
 use nes::bmp::Image;
 use nes::bmp::Pixel;
 use std::fs::File;
 use std::io::prelude::*;
-use std::sync::mpsc::Sender;
+use std::rc::Rc;
 
 pub struct Ppu {
     // PPU register
@@ -15,7 +16,6 @@ pub struct Ppu {
     oam_address: u8, // $2003(w)
     scroll: u8,      // $2005(w*2)
     vram_addr: u8,   // $2006(w*2)
-    oam_dma: u8,     // $4014(w)
     vram: Vec<u8>,   // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
                      // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
                      // 0x2000-0x23FF:Name table1
@@ -24,7 +24,7 @@ pub struct Ppu {
                      // 0x2C00-0x2FFF:Name table4
                      // 0x3F00-0x3F1F:Pallete
     oam_ram: Vec<u8>, // for sprites
-    mapper: Weak<RefCell<Box<Mapper>>>,
+    mbc: Weak<RefCell<Box<Mbc>>>,
     tick: u64,
     current_line: u16,
     current_cycle: u16,
@@ -32,6 +32,8 @@ pub struct Ppu {
     scroll_position: Vec<u8>,
     is_raise_nmi:    bool, // true:when raise interruput
     is_display_changed: bool,
+
+    tasks: Vec<Box<OamDmaTask>>,
 }
 
 const PALETTES: [[u8;3]; 64] = [
@@ -101,20 +103,20 @@ const PALETTES: [[u8;3]; 64] = [
     [0x00u8, 0x00u8, 0x00u8],
 ];
 
-const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
-const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
-const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
-const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
-const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
-const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
-const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
+#[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
+#[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
+#[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
+#[allow(dead_code)] const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
+#[allow(dead_code)] const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
+#[allow(dead_code)] const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
+#[allow(dead_code)] const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
 
-const SCANLINE: i32 = 261;
-const CYCLE_PER_LINE: i32 = 341;
+#[allow(dead_code)] const SCANLINE: i32 = 261;
+#[allow(dead_code)] const CYCLE_PER_LINE: i32 = 341;
 
-const STATUS_OVERFLOW : u8 = 0x20u8; // sprite over flow
-const STATUS_SPRITE   : u8 = 0x40u8; // sprite zero hit
-const STATUS_VBLANK   : u8 = 0x80u8;
+#[allow(dead_code)] const STATUS_OVERFLOW : u8 = 0x20u8; // sprite over flow
+#[allow(dead_code)] const STATUS_SPRITE   : u8 = 0x40u8; // sprite zero hit
+#[allow(dead_code)] const STATUS_VBLANK   : u8 = 0x80u8;
 
 #[allow(dead_code)] const MASK_GRAY                     :u8 = 0x01u8;
 #[allow(dead_code)] const MASK_SHOW_BACKGROUND_LEFTMOST :u8 = 0x02u8;
@@ -126,7 +128,7 @@ const STATUS_VBLANK   : u8 = 0x80u8;
 #[allow(dead_code)] const MASK_EMP_BLUE                 :u8 = 0x80u8;
 
 impl Ppu {
-    pub fn new(mapper: Weak<RefCell<Box<Mapper>>>) -> Self {
+    pub fn new() -> Self {
         Ppu{
             control:       0u8,
             mask:          0u8,
@@ -134,8 +136,7 @@ impl Ppu {
             oam_address:   0u8,
             scroll:        0u8,
             vram_addr:     0u8,
-            oam_dma:       0u8,
-            mapper:        mapper,
+            mbc:           Weak::default(),
             vram:          vec![0x00u8; 0x4000],
             oam_ram:       vec![0x00u8; 0x0100],
             tick:          0u64,
@@ -145,11 +146,20 @@ impl Ppu {
             scroll_position: vec![0,0],
             is_raise_nmi   : false,
             is_display_changed   : false,
+            tasks   : vec![],
         }
+    }
+
+    pub fn set_mbc(&mut self, mbc: Weak<RefCell<Box<Mbc>>>) {
+        self.mbc = mbc;
     }
 
     pub fn tick(&mut self) {
         self.tick = self.tick.overflowing_add(1).0;
+        if self.tasks.len() > 0 {
+            let task = self.tasks.pop().unwrap();
+            task.call(self);
+        }
         self.process_cycle();
     }
 
@@ -180,6 +190,14 @@ impl Ppu {
         }
     }
 
+    fn with_mapper<F>(&self, func: F)
+        where F: FnOnce(Rc<RefCell<Box<Mapper>>>){
+        let mbc = self.mbc.upgrade().unwrap();
+        let mbc = mbc.borrow_mut();
+        let mapper = mbc.mapper().clone();
+        func(mapper);
+    }
+
     fn render_pattern(&self,
                       img: &mut Image,
                       base_x: u16,
@@ -187,39 +205,39 @@ impl Ppu {
                       pattern_index: u16,
                       palette_addr: u16) {
         let head_addr = (self.pattern_addr() + pattern_index * 2 * 8) as usize;
-        let tail_addr = head_addr + 16;
+        let tail_addr = (head_addr + 16) as usize;
+        self.with_mapper(|mapper: Rc<RefCell<Box<Mapper>>>| {
+            let mapper = mapper.borrow();
+            let memory = &mapper.chr_rom()[head_addr..tail_addr];
+            let pattern = Pattern::new(&memory);
 
-        let mapper = self.mapper.upgrade().unwrap();
-        let mapper = mapper.borrow();
-        let memory = &mapper.chr_rom()[head_addr..tail_addr];
-        let pattern = Pattern::new(memory);
-
-        // draw pattern
-        for pix_x in 0..8 {
-            for pix_y in 0..8 {
-                let x = (base_x + pix_x) as u32;
-                let y = (base_y + pix_y) as u32;
-                if x < 0 || y < 0 ||
-                   img.get_width() <= x ||
-                   img.get_height() <= y {
-                    continue;
+            // draw pattern
+            for pix_x in 0..8 {
+                for pix_y in 0..8 {
+                    let x = (base_x + pix_x) as u32;
+                    let y = (base_y + pix_y) as u32;
+                    if x == 0 || y == 0 ||
+                       img.get_width() <= x ||
+                       img.get_height() <= y {
+                        continue;
+                    }
+                    let index = pattern.pal_index(pix_x as u8, pix_y as u8) as usize;
+                    // color pallete address
+                    // BG1 0x3F00-0x3F03
+                    // BG2 0x3F04-0x3F07
+                    // BG3 0x3F08-0x3F0B
+                    // BG4 0x3F0C-0x3F0F
+                    // OBJ1 0x3F10-0x3F13
+                    // OBJ2 0x3F14-0x3F17
+                    // OBJ3 0x3F18-0x3F1B
+                    // OBJ4 0x3F1C-0x3F1F
+                    let pal_index = self.vram[palette_addr as usize + index] as usize;
+                    let color = PALETTES[pal_index];
+                    let pixel = Pixel::new(color[0], color[1], color[2]);
+                    img.set_pixel(x as u32, y as u32, pixel);
                 }
-                let index = pattern.pal_index(pix_x as u8, pix_y as u8) as usize;
-                // color pallete address
-                // BG1 0x3F00-0x3F03
-                // BG2 0x3F04-0x3F07
-                // BG3 0x3F08-0x3F0B
-                // BG4 0x3F0C-0x3F0F
-                // OBJ1 0x3F10-0x3F13
-                // OBJ2 0x3F14-0x3F17
-                // OBJ3 0x3F18-0x3F1B
-                // OBJ4 0x3F1C-0x3F1F
-                let pal_index = self.vram[palette_addr as usize + index] as usize;
-                let color = PALETTES[pal_index];
-                let pixel = Pixel::new(color[0], color[1], color[2]);
-                img.set_pixel(x as u32, y as u32, pixel);
             }
-        }
+        });
     }
 
     pub fn dump(&self) {
@@ -371,23 +389,8 @@ impl Ppu {
             0x4014 => { // OAM_DMA
                 let source = (data as u16) << 8;
                 let target = self.oam_address as u16;
-                info!("PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
-                      target,
-                      target + 0x0100u16,
-                      source,
-                      source + 0x0100u16);
-                for i in 0..0x100u16 {
-                    let s = (source + i) as u16;
-                    let t = (target + i) as usize;
-                    let mapper = self.mapper.upgrade().unwrap();
-                    let v = mapper.borrow().read_prg(s); // TODO:read-memory
-                    self.oam_ram[t] = v;
-                    info!("oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
-                    t,
-                    s,
-                    v);
-                }
-                self.is_display_changed = true;
+                // push task, because cant borrow mbc here
+                self.tasks.push(Box::new(OamDmaTask::new(source, target)));
             },
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
         }
@@ -428,3 +431,39 @@ impl<'a> Pattern<'a> {
         low >> 7 | high >> 6
     }
 }
+
+struct OamDmaTask {
+    source: u16,
+    target: u16,
+}
+
+impl OamDmaTask {
+    fn new(source: u16, target: u16) -> Self {
+        OamDmaTask{
+            source: source,
+            target: target,
+        }
+    }
+
+    fn call(&self, ppu: &mut Ppu) {
+        info!("PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
+              self.target,
+              self.target + 0x0100u16,
+              self.source,
+              self.source + 0x0100u16);
+        // TODO:bulk copy
+        for i in 0..0x100u16 {
+            let s = (self.source + i) as u16;
+            let t = (self.target + i) as usize;
+            let mbc = ppu.mbc.upgrade().unwrap();
+            let v = mbc.borrow().read(s);
+            ppu.oam_ram[t] = v;
+            info!("oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
+            t,
+            s,
+            v);
+        }
+        ppu.is_display_changed = true;
+    }
+}
+

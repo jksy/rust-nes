@@ -9,20 +9,17 @@ extern crate env_logger;
 use nes::rom::Rom;
 use nes::Nes;
 use nes::joypad;
-use std::sync::mpsc::channel;
 use bmp::Image;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
 use sdl2::event::Event;
-use sdl2::EventPump;
 use sdl2::keyboard::Keycode;
-use sdl2::keyboard::Scancode;
 use sdl2::render::Texture;
 use sdl2::video::Window;
 use sdl2::render::Canvas;
 use std::collections::HashSet;
 use std::{thread, time};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::SystemTime;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -57,13 +54,11 @@ fn main() {
     nes.set_rom(rom.clone());
     nes.reset();
 
-    let mut counter = 0;
     let mut texture = creator.
         create_texture_streaming(PixelFormatEnum::RGB888, 256, 240).unwrap();
 
     let mut slow = false;
     let mut prev_render_time = SystemTime::now();
-    let mut prev_keyboard_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
     let mut img = Image::new(256, 240);
@@ -100,7 +95,6 @@ fn main() {
         }
 
         // update canvas if display changed
-        let result = nes.is_display_changed();
         if nes.is_display_changed() == false {
             continue;
         }
@@ -150,7 +144,7 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
 
 fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, texture: &mut Texture) {
     nes.render_image(img);
-    img.save("x.bmp");
+    let _ = img.save("x.bmp");
 
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
         for y in 0u32..240u32 {

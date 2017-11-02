@@ -88,6 +88,10 @@ impl Mbc {
         };
     }
 
+    pub fn mapper(&self) -> Rc<RefCell<Box<Mapper>>> {
+        self.mapper.clone()
+    }
+
     pub fn is_enable_nmi(&self) -> bool {
         self.ppu.borrow().is_enable_nmi()
     }

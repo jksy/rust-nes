@@ -17,11 +17,7 @@ use nes::mbc::Mbc;
 use nes::joypad::Joypad;
 use nes::ppu::Ppu;
 use nes::mapper::Mapper;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender;
 use nes::bmp::Image;
-use std::thread;
-use std::time;
 
 pub struct Nes {
     cpu: Cpu,
@@ -31,7 +27,7 @@ pub struct Nes {
     // tick: u32,
 }
 
-macro_rules !wrap_with_rc {
+macro_rules !wrap_rc {
     ($value: expr) => {
         Rc::new(RefCell::new(Box::new($value)));
     }
@@ -39,10 +35,12 @@ macro_rules !wrap_with_rc {
 
 impl Nes {
     pub fn new() -> Self {
-        let mapper = wrap_with_rc!(Mapper::new());
-        let ppu    = wrap_with_rc!(Ppu::new(Rc::downgrade(&mapper)));
-        let joypad = wrap_with_rc!(Joypad::new());
-        let mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+        let mapper = wrap_rc!(Mapper::new());
+        let ppu    = wrap_rc!(Ppu::new());
+        let joypad = wrap_rc!(Joypad::new());
+        let mbc    = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+
+        ppu.borrow_mut().set_mbc(Rc::downgrade(&mbc));
         let cpu = Cpu::new(mbc.clone());
 
         Nes{

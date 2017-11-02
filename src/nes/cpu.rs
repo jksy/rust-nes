@@ -1047,9 +1047,10 @@ impl Cpu {
         self.mbc.borrow_mut().read16(addr)
     }
 
-    fn write(&mut self, addr: u16, data: u8) {
-        self.mbc.borrow_mut().write(addr, data)
-    }
+    // not used
+    // pub fn write(&mut self, addr: u16, data: u8) {
+    //     self.mbc.borrow_mut().write(addr, data)
+    // }
 
     fn push(&mut self, data: u8) {
         let addr = self.s as u16 + 0x0100;
