@@ -190,7 +190,7 @@ impl Ppu {
         for y in 0..30 {
             for x in 0..32 {
                 let address = name_table_addr + x + y * 32;
-                let pattern_index = self.read_vram(address);
+                let pattern_index = self.vram.read(address);
                 self.render_pattern(img, x * 8, y * 8, pattern_index, 0x3f00);
             }
         }
@@ -207,16 +207,11 @@ impl Ppu {
         }
     }
 
-    fn read_vram(&self, addr: u16) -> u8 {
-        // self.vram[addr as usize]
-        self.vram.read(addr)
-    }
-
     // TODO:no copy
     fn read_vram_range(&self, start: u16, end: u16) -> Vec<u8> {
         let mut v = vec![];
         for i in start..end {
-            v.push(self.read_vram(i));
+            v.push(self.vram.read(i));
         }
         v
     }
@@ -253,7 +248,7 @@ impl Ppu {
                 // OBJ2 0x3F14-0x3F17
                 // OBJ3 0x3F18-0x3F1B
                 // OBJ4 0x3F1C-0x3F1F
-                let pal_index = self.read_vram(palette_addr + index) as usize;
+                let pal_index = self.vram.read(palette_addr + index) as usize;
                 let color = PALETTES[pal_index];
                 let pixel = Pixel::new(color[0], color[1], color[2]);
                 img.set_pixel(x as u32, y as u32, pixel);
@@ -350,7 +345,7 @@ impl Ppu {
             0x2007 => { // PPU_DATA
                 let mut address = self.vram_write_addr[0] as u16;
                 address |= (self.vram_write_addr[1] as u16) << 8;
-                self.read_vram(address)
+                self.vram.read(address)
             },
             _ => panic!("PPU read error:#{:x}", addr)
         }
