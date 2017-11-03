@@ -20,6 +20,7 @@ use sdl2::render::Canvas;
 use std::collections::HashSet;
 use std::{thread, time};
 use std::time::SystemTime;
+use std::rc::Rc;
 
 fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -45,11 +46,15 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut nes = Nes::new();
-    // let rom = Rom::load("power_up_palette.nes").unwrap();
-    // let rom = Rom::load("color_test.nes").unwrap();
-    let rom = Rom::load("nestest.nes").unwrap();
-    // let rom = Rom::load("ram_retain.nes").unwrap();
-    // let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
+    // let rom = Rom::load("roms/scanline.nes").unwrap();
+    // let rom = Rom::load("roms/branch_timing_tests/1.Branch_Basics.nes").unwrap();
+    // let rom = Rom::load("roms/dk.nes").unwrap();
+    // let rom = Rom::load("roms/full_palette.nes").unwrap();
+    // let rom = Rom::load("roms/power_up_palette.nes").unwrap();
+    // let rom = Rom::load("roms/color_test.nes").unwrap();
+    // let rom = Rom::load("roms/nestest.nes").unwrap();
+    // let rom = Rom::load("roms/ram_retain.nes").unwrap();
+    let rom = Rom::load("roms/cpu_dummy_reads.nes").unwrap();
     rom.print();
     nes.set_rom(rom.clone());
     nes.reset();

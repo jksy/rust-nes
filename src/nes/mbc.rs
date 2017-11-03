@@ -29,7 +29,7 @@ impl Mbc {
     }
 
     pub fn set_rom(&mut self, rom: Box<Rom>){
-        self.mapper.borrow_mut().set_rom(rom)
+        self.mapper.borrow_mut().set_rom(rom);
     }
 
     pub fn initial_pc(&self) -> u16 {

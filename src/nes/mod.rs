@@ -36,7 +36,7 @@ macro_rules !wrap_rc {
 impl Nes {
     pub fn new() -> Self {
         let mapper = wrap_rc!(Mapper::new());
-        let ppu    = wrap_rc!(Ppu::new());
+        let ppu    = wrap_rc!(Ppu::new(mapper.clone()));
         let joypad = wrap_rc!(Joypad::new());
         let mbc    = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
 
@@ -76,6 +76,7 @@ impl Nes {
     pub fn set_rom(&mut self, rom: Box<rom::Rom>) {
         self.mbc.borrow_mut().set_rom(rom);
         self.cpu.setup();
+        self.ppu.borrow_mut().setup();
     }
 
     pub fn reset(&mut self) {

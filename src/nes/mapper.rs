@@ -21,6 +21,10 @@ impl Mapper {
         self.rom.chr()
     }
 
+    pub fn is_horizontal(&self) -> bool {
+        self.rom.is_horizontal()
+    }
+
     pub fn initial_pc(&self) -> u16 {
         self.rom.initial_pc()
     }

@@ -49,7 +49,7 @@ pub struct Rom {
 }
 
 const PRG_BLOCK_SIZE: usize = 16 * 1024;
-const CHR_BLOCK_SIZE: usize = 16 * 1024;
+const CHR_BLOCK_SIZE: usize = 8 * 1024;
 
 impl Rom {
     pub fn load(filename: &str) -> Result<(Box<Rom>), std::io::Error> {
@@ -88,6 +88,8 @@ impl Rom {
         info!("chr_page_count:{}", self.header.chr_page_count);
         info!("mapper_no:{}", self.header.mapper_no());
         info!("flags6:{}", self.header.flags6);
+        info!("is_horizontal:{}", self.is_horizontal());
+        info!("has_trainer:{}", self.has_trainer());
         info!("PRG Len:{}", self.prg.len());
         info!("CHR Len:{}", self.chr.len());
     }
@@ -120,6 +122,14 @@ impl Rom {
         }
 
         pc
+    }
+
+    pub fn is_horizontal(&self) -> bool {
+        self.header.is_horizontal()
+    }
+
+    pub fn has_trainer(&self) -> bool {
+        self.header.has_trainer()
     }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {
