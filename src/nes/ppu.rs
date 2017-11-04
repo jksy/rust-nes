@@ -310,40 +310,50 @@ impl Ppu {
         let y = self.current_line;
         // render BG
         let addr = self.name_table_addr_from_point(x, y);
-        let pattern_index = (self.vram.read(addr) as u16) * 2 * 8 + self.pattern_addr();
-
+        let pattern_index = self.vram.read(addr);
         self.render_pattern_pixel(pattern_index,
+                                  x, y,
                                   x, y,
                                   0x3F00); // TODO:replace optimal palette addr
 
         // render sprite
+        self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
-            let y             = self.oam_ram[sprite_index * 4]     as u16;
-            let pattern_index = self.oam_ram[sprite_index * 4 + 1] as u16;
+            let sprite_y      = self.oam_ram[sprite_index * 4]     as u16;
+            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
             let attr          = self.oam_ram[sprite_index * 4 + 2] as u16;
-            let x             = self.oam_ram[sprite_index * 4 + 3] as u16;
-            if y < self.current_line || self.current_line + 8 < y {
+            let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
+            if y < sprite_y || sprite_y + 8 < y {
                 continue;
             }
-            if x < self.current_cycle || self.current_cycle + 8 < x {
+            if x < sprite_x || sprite_x + 8 < x {
                 continue;
             }
 
             // TODO:replace optimal palette addr
-            self.render_pattern_pixel(pattern_index, x, y, 0x3F10);
+            self.render_pattern_pixel(pattern_index,
+                                      x - sprite_x, y - sprite_y,
+                                      x, y,
+                                      0x3F10);
+            if sprite_index == 0 {
+                self.status |= STATUS_SPRITE; // set sprite zero hit
+            }
         }
     }
 
     fn render_pattern_pixel(&mut self,
-                            pattern_index: u16,
-                            x: u16 ,
+                            pattern_index: u8,
+                            pattern_x: u16,
+                            pattern_y: u16,
+                            x: u16,
                             y: u16,
                             palette_addr: u16) {
-        let memory = self.read_vram_range(pattern_index, pattern_index+16);
+        let pattern_addr = (pattern_index as u16) * 2 * 8 + self.pattern_addr();
+        let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
         let pattern = Pattern::new(&memory);
 
-        let index = pattern.pal_index((x & 0x07) as u8,
-                                      (y & 0x07) as u8);
+        let index = pattern.pal_index((pattern_x & 0x07) as u8,
+                                      (pattern_y & 0x07) as u8);
 
         let pal_index = self.vram.read(palette_addr + index as u16) as usize;
         let color = PALETTES[pal_index];
