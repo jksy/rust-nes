@@ -51,10 +51,10 @@ fn main() {
     // let rom = Rom::load("roms/dk.nes").unwrap();
     // let rom = Rom::load("roms/full_palette.nes").unwrap();
     // let rom = Rom::load("roms/power_up_palette.nes").unwrap();
-    // let rom = Rom::load("roms/color_test.nes").unwrap();
+    let rom = Rom::load("roms/color_test.nes").unwrap();
     // let rom = Rom::load("roms/nestest.nes").unwrap();
     // let rom = Rom::load("roms/ram_retain.nes").unwrap();
-    let rom = Rom::load("roms/cpu_dummy_reads.nes").unwrap();
+    // let rom = Rom::load("roms/cpu_dummy_reads.nes").unwrap();
     rom.print();
     nes.set_rom(rom.clone());
     nes.reset();

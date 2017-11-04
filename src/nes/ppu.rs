@@ -35,6 +35,8 @@ pub struct Ppu {
     is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
 
+    raw_bmp: Image,
+
     tasks: Vec<Box<OamDmaTask>>,
 }
 
@@ -151,6 +153,7 @@ impl Ppu {
             is_display_changed   : false,
             is_horizontal  : horizontal,
 
+            raw_bmp:       Image::new(512, 480),
             mbc:           Weak::default(),
             mapper:        mapper,
             tasks   : vec![],
@@ -163,7 +166,7 @@ impl Ppu {
 
     pub fn setup(&mut self) {
         // copy chr from rom
-        // TODO: directry read read from rom
+        // TODO: directry read from rom
         let mapper = self.mapper.borrow();
         let chr_rom = mapper.chr_rom();
         for i in 0..chr_rom.len() {
@@ -181,19 +184,12 @@ impl Ppu {
     }
 
     pub fn render_image(&self, img: &mut Image) {
-        self.render_bg(img);
-        self.render_sprites(img);
-    }
-
-    fn render_bg(&self, img: &mut Image) {
-        let name_table_addr = self.name_table_addr();
-        for y in 0..30 {
-            for x in 0..32 {
-                let address = name_table_addr + x + y * 32;
-                let pattern_index = self.vram.read(address);
-                self.render_pattern(img, x * 8, y * 8, pattern_index, 0x3f00);
+        for y in 0..240 {
+            for x in 0..256 {
+                img.set_pixel(x, y, self.raw_bmp.get_pixel(x, y));
             }
         }
+        // self.render_sprites(img);
     }
 
     fn render_sprites(&self, img: &mut Image) {
@@ -294,12 +290,6 @@ impl Ppu {
         }
     }
 
-    fn process_pixel(&mut self) {
-        // self.name_table_addr()
-        // self.current_line;  // y
-        // self.current_cycle; // x
-    }
-
     fn name_table_addr(&self) -> u16 {
         match self.control & CONTROL_MASK_NAME_TABLE_ADDR {
             0 => 0x2000u16,
@@ -308,6 +298,59 @@ impl Ppu {
             3 => 0x2C00u16,
             _ => {unreachable!()}
         }
+    }
+
+    fn name_table_addr_from_point(&self, x: u16, y: u16) -> u16 {
+        let base = self.name_table_addr();
+        base + (x / 8) + (y / 8) * 32
+    }
+
+    fn process_pixel(&mut self) {
+        let x = self.current_cycle;
+        let y = self.current_line;
+        // render BG
+        let addr = self.name_table_addr_from_point(x, y);
+        let pattern_index = (self.vram.read(addr) as u16) * 2 * 8 + self.pattern_addr();
+
+        self.render_pattern_pixel(pattern_index,
+                                  x, y,
+                                  0x3F00); // TODO:replace optimal palette addr
+
+        // render sprite
+        for sprite_index in 0..64 {
+            let y             = self.oam_ram[sprite_index * 4]     as u16;
+            let pattern_index = self.oam_ram[sprite_index * 4 + 1] as u16;
+            let attr          = self.oam_ram[sprite_index * 4 + 2] as u16;
+            let x             = self.oam_ram[sprite_index * 4 + 3] as u16;
+            if y < self.current_line || self.current_line + 8 < y {
+                continue;
+            }
+            if x < self.current_cycle || self.current_cycle + 8 < x {
+                continue;
+            }
+
+            // TODO:replace optimal palette addr
+            self.render_pattern_pixel(pattern_index, x, y, 0x3F10);
+        }
+    }
+
+    fn render_pattern_pixel(&mut self,
+                            pattern_index: u16,
+                            x: u16 ,
+                            y: u16,
+                            palette_addr: u16) {
+        let memory = self.read_vram_range(pattern_index, pattern_index+16);
+        let pattern = Pattern::new(&memory);
+
+        let index = pattern.pal_index((x & 0x07) as u8,
+                                      (y & 0x07) as u8);
+
+        let pal_index = self.vram.read(palette_addr + index as u16) as usize;
+        let color = PALETTES[pal_index];
+        let pixel = Pixel::new(color[0], color[1], color[2]);
+        self.raw_bmp.set_pixel(x as u32,
+                               y as u32,
+                               pixel);
     }
 
     fn bg_addr(&self) -> u16 {
@@ -500,7 +543,7 @@ struct PaletteTable {
 struct Vram {
     pattern_tables: Vec<PatternTable>,
     name_tables:    Vec<Rc<RefCell<Box<NameTable>>>>,
-    palette_tables: Vec<PaletteTable>,
+    palette_tables: Vec<Rc<RefCell<Box<PaletteTable>>>>,
 }
 
 impl NameTable {
@@ -576,7 +619,14 @@ impl Vram {
 
         let mut palette_tables = Vec::new();
         for _ in 0..8 {
-            palette_tables.push(PaletteTable::new());
+            palette_tables.push(Rc::new(RefCell::new(Box::new(PaletteTable::new()))));
+        }
+        // mirror of palette 3F00~3F1F (3F20)-(3FFF)
+        for _ in 0..8 {
+            for i in 0..8 {
+                let p = palette_tables[i].clone();
+                palette_tables.push(p);
+            }
         }
 
         Vram {
@@ -597,9 +647,9 @@ impl Vram {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
                 self.name_tables[index].borrow().read(target_addr)
             },
-            0x3F00...0x3F1F => {
+            0x3F00...0x3FFF => {
                 let (index, target_addr) = Vram::calclate_palettetable_addr(addr);
-                self.palette_tables[index].read(target_addr)
+                self.palette_tables[index].borrow().read(target_addr)
             },
             _ => {
                 panic!("cant read PPU:0x{:04x}", addr);
@@ -618,9 +668,9 @@ impl Vram {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
                 self.name_tables[index].borrow_mut().write(target_addr, data)
             },
-            0x3F00...0x3F1F => {
+            0x3F00...0x3FFF => {
                 let (index, target_addr) = Vram::calclate_palettetable_addr(addr);
-                self.palette_tables[index].write(target_addr, data)
+                self.palette_tables[index].borrow_mut().write(target_addr, data)
             },
             _ => {
                 panic!("cant write PPU:0x{:04x} = {:02x}", addr, data);
