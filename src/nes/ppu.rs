@@ -200,7 +200,7 @@ impl Ppu {
     fn read_vram_range(&self, start: u16, end: u16) -> Vec<u8> {
         let mut v = vec![];
         for i in start..end {
-            v.push(self.vram.read(i));
+            v.push(self.vram.read_no_log(i));
         }
         v
     }
@@ -208,8 +208,13 @@ impl Ppu {
     pub fn dump(&self) {
         // let mut file = File::create("vram.dmp").unwrap();
         // let _ = file.write_all(&self.vram).unwrap();
-        let mut file = File::create("oam_ram.dmp").unwrap();
-        let _ = file.write_all(&self.oam_ram).unwrap();
+        // let mut vec = vec![];
+        // for i in 0x000..0x4000 {
+        //     vec.push(self.vram.read(i));
+        // }
+        // let mut file = File::create("vram.dmp").unwrap();
+        // let _ = file.write_all(&vec).unwrap();
+
     }
 
     fn process_cycle(&mut self) {
@@ -234,7 +239,7 @@ impl Ppu {
         }
 
         self.current_cycle += 1;
-        if self.current_cycle == 261 {
+        if self.current_cycle == 256 {
             self.current_cycle = 0;
             self.current_line += 1;
             if self.current_line == 341 {
@@ -276,20 +281,24 @@ impl Ppu {
 
     fn attriute_from_point(&self, x: u16, y: u16) -> u16 {
         let base = self.name_table_addr();
-        let x = x / 8;
-        let y = y / 8;
-        let index = x + y;
+        let index_x = x / 64;
+        let index_y = y / 4;
+        let index = index_x + index_y;
 
         let addr = base + index + 0x03C0;
         let attr = self.vram.read(addr);
+        println!("attribute addr = {:x}, {:x}", addr, attr);
 
-        let mut shift = x % 2;
-        shift += (y % 2) * 2;
+        let mut shift = (x / 8) % 2;
+        shift += ((y / 8) % 2) * 2;
 
         ((attr >> shift) & 0x03) as u16
     }
 
     fn process_pixel(&mut self) {
+        println!("current_line,current_cycle = {:}, {:}",
+                 self.current_line,
+                 self.current_cycle);
         // let x = self.current_cycle;
         // let y = self.current_line;
 
@@ -348,8 +357,15 @@ impl Ppu {
 
         let pal_index = self.vram.read(palette_addr + index as u16) as usize +
                         (attribute * 4) as usize;
+        // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
 
         let color = PALETTES[pal_index];
+        println!("{}, {}, {:02x},{:02x},{:02x}",
+                 pal_index,
+                 attribute,
+                 color[0],
+                 color[1],
+                 color[2]);
         let pixel = Pixel::new(color[0], color[1], color[2]);
         self.raw_bmp.set_pixel(x as u32,
                                y as u32,
@@ -630,14 +646,13 @@ impl Vram {
         }
     }
 
-    fn read(&self, addr: u16) -> u8 {
-        info!("Vram::read({:04x})", addr);
+    fn read_no_log(&self, addr: u16) -> u8 {
         match addr {
             0x0000...0x1FFF => {
                 let (index, target_addr) = Vram::calclate_patterntable_addr(addr);
                 self.pattern_tables[index].read(target_addr)
             },
-            0x2000...0x2FFF => {
+            0x2000...0x3EFF => {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
                 self.name_tables[index].borrow().read(target_addr)
             },
@@ -651,6 +666,11 @@ impl Vram {
         }
     }
 
+    fn read(&self, addr: u16) -> u8 {
+        info!("Vram::read({:04x})", addr);
+        self.read_no_log(addr)
+    }
+
     fn write(&mut self, addr: u16, data: u8) {
         info!("Vram::write({:04x}, {:02x})", addr, data);
         match addr {
@@ -658,7 +678,7 @@ impl Vram {
                 let (index, target_addr) = Vram::calclate_patterntable_addr(addr);
                 self.pattern_tables[index].write(target_addr, data)
             },
-            0x2000...0x2FFF => {
+            0x2000...0x3E00 => {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
                 self.name_tables[index].borrow_mut().write(target_addr, data)
             },
