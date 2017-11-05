@@ -28,7 +28,7 @@ pub struct Ppu {
     oam_ram: Vec<u8>, // for sprites
     mbc: Weak<RefCell<Box<Mbc>>>,
     mapper: Rc<RefCell<Box<Mapper>>>,
-    tick: u64,
+    cycle: u64,
     current_line: u16,
     current_cycle: u16,
     is_raise_nmi:    bool, // true:when raise interruput
@@ -144,7 +144,7 @@ impl Ppu {
             oam_address:   0u8,
             vram:         Vram::new(horizontal),
             oam_ram:       vec![0x00u8; 0x0100],
-            tick:          0u64,
+            cycle:          0u64,
             current_line:  0,
             current_cycle: 0,
             vram_write_addr: vec![0,0],
@@ -174,8 +174,13 @@ impl Ppu {
         }
     }
 
+    #[inline]
+    pub fn cycle(&self) -> u64 {
+        self.cycle
+    }
+
     pub fn tick(&mut self) {
-        self.tick = self.tick.overflowing_add(1).0;
+        self.cycle = self.cycle.wrapping_add(1);
         if self.tasks.len() > 0 {
             let task = self.tasks.pop().unwrap();
             task.call(self);
@@ -280,11 +285,6 @@ impl Ppu {
 
         let mut shift = x % 2;
         shift += (y % 2) * 2;
-        println!("attr base={:x}, addr={:x} => {:x}, shift={:}",
-                 base,
-                 addr,
-                 attr,
-                 shift);
 
         ((attr >> shift) & 0x03) as u16
     }
@@ -349,7 +349,6 @@ impl Ppu {
         let pal_index = self.vram.read(palette_addr + index as u16) as usize +
                         (attribute * 4) as usize;
 
-        println!("pal_index={:}", pal_index);
         let color = PALETTES[pal_index];
         let pixel = Pixel::new(color[0], color[1], color[2]);
         self.raw_bmp.set_pixel(x as u32,

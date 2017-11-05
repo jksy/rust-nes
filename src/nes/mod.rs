@@ -63,14 +63,24 @@ impl Nes {
     }
 
     pub fn tick(&mut self) {
-        {
-            // info!("ppu.tick()");
-            let mut ppu = self.ppu.borrow_mut();
-            ppu.tick();
-            ppu.tick();
-            ppu.tick();
+        // {
+        //     // info!("ppu.tick()");
+        //     let mut ppu = self.ppu.borrow_mut();
+        //     ppu.tick();
+        //     ppu.tick();
+        //     ppu.tick();
+        // }
+        // self.cpu.tick();
+        let cpu_cycle = self.cpu.cycle();
+        let ppu_cycle = {
+            self.ppu.borrow_mut().cycle()
+        };
+
+        if cpu_cycle > ppu_cycle * 3 {
+            self.ppu.borrow_mut().tick();
+        } else {
+            self.cpu.tick();
         }
-        self.cpu.tick();
     }
 
     pub fn set_rom(&mut self, rom: Box<rom::Rom>) {
