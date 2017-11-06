@@ -107,6 +107,13 @@ const PALETTES: [[u8;3]; 64] = [
     [0x00u8, 0x00u8, 0x00u8],
 ];
 
+const INITIAL_PALETTE_TABLE: [u8; 32] = [
+    0x09,0x01,0x00,0x01,0x00,0x02,0x02,0x0D,
+    0x08,0x10,0x08,0x24,0x00,0x00,0x04,0x2C,
+    0x09,0x01,0x34,0x03,0x00,0x04,0x00,0x14,
+    0x08,0x3A,0x00,0x02,0x00,0x20,0x2C,0x08,
+];
+
 #[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 #[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
 #[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
@@ -287,7 +294,7 @@ impl Ppu {
 
         let addr = base + index + 0x03C0;
         let attr = self.vram.read(addr);
-        println!("attribute addr = {:x}, {:x}", addr, attr);
+        // println!("attribute addr = {:x}, {:x}", addr, attr);
 
         let mut shift = (x / 8) % 2;
         shift += ((y / 8) % 2) * 2;
@@ -355,17 +362,17 @@ impl Ppu {
         let index = pattern.pal_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
-        let pal_index = self.vram.read(palette_addr + index as u16) as usize +
-                        (attribute * 4) as usize;
-        // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
+        // let pal_index = self.vram.read(palette_addr + index as u16) as usize +
+        //                 (attribute * 4) as usize;
+        let pal_index = self.vram.read(palette_addr + index as u16) as usize;
 
         let color = PALETTES[pal_index];
-        println!("{}, {}, {:02x},{:02x},{:02x}",
-                 pal_index,
-                 attribute,
-                 color[0],
-                 color[1],
-                 color[2]);
+        // println!("{}, {}, {:02x},{:02x},{:02x}",
+        //          pal_index,
+        //          attribute,
+        //          color[0],
+        //          color[1],
+        //          color[2]);
         let pixel = Pixel::new(color[0], color[1], color[2]);
         self.raw_bmp.set_pixel(x as u32,
                                y as u32,
@@ -420,7 +427,7 @@ impl Ppu {
                       self.oam_address,
                       data);
                 self.oam_ram[self.oam_address as usize] = data;
-                self.oam_address += 1
+                self.oam_address = self.oam_address.wrapping_add(1);
             },
             0x2005 => { // PPU_SCROLL
                 self.scroll_position.insert(0, data);
@@ -519,7 +526,7 @@ impl OamDmaTask {
               self.source,
               self.source + 0x0100u16);
         // TODO:bulk copy
-        for i in 0..0x100u16 {
+        for i in 0..0xFFu16 {
             let s = (self.source + i) as u16;
             let t = (self.target + i) as usize;
             let mbc = ppu.mbc.upgrade().unwrap();
@@ -589,8 +596,8 @@ impl PatternTable {
 }
 
 impl PaletteTable {
-    fn new() -> Self {
-        PaletteTable{ram: vec![0x0u8; 0x004]}
+    fn new(initial: &[u8]) -> Self {
+        PaletteTable{ram: initial.to_vec()}
     }
 
     fn read(&self, addr: u16) -> u8 {
@@ -628,8 +635,11 @@ impl Vram {
         }
 
         let mut palette_tables = Vec::new();
-        for _ in 0..8 {
-            palette_tables.push(Rc::new(RefCell::new(Box::new(PaletteTable::new()))));
+        for index in 0..8 {
+            let head = index * 4;
+            let initial_palette = &INITIAL_PALETTE_TABLE[head..(head+4)];
+            let table = Rc::new(RefCell::new(Box::new(PaletteTable::new(initial_palette))));
+            palette_tables.push(table);
         }
         // mirror of palette 3F00~3F1F (3F20)-(3FFF)
         for _ in 0..8 {
