@@ -1,7 +1,9 @@
+mod addressing_mode;
+
+use nes::cpu::addressing_mode::*;
 use nes::mbc::Mbc;
 use std::cell::RefCell;
 use std::rc::Rc;
-use nes::addressing_mode::*;
 
 #[derive(Clone)]
 pub struct Cpu {
@@ -1165,4 +1167,5 @@ impl Cpu {
         self.read16(addr)
     }
 }
+
 

@@ -39,7 +39,7 @@ impl Mbc {
     pub fn read(&self, addr: u16) -> u8 {
         let x = match addr {
             0x0000u16...0x1FFFu16 => self.ram[addr as usize],
-            0x2000u16...0x3FFFu16 => self.ppu.borrow().read(addr & 0x2007),
+            0x2000u16...0x3FFFu16 => self.ppu.borrow_mut().read(addr & 0x2007),
             0x4016u16...0x4017u16 => self.joypad.borrow_mut().read(addr),
             0x6000u16...0x7FFFu16 => { // self.sram[],
                 0x00u8

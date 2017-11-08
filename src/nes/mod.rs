@@ -1,14 +1,11 @@
-extern crate timer;
-extern crate chrono;
 extern crate bmp;
 
 mod cpu;
-pub mod rom;
+mod mapper;
 mod mbc;
 mod ppu;
 pub mod joypad;
-mod mapper;
-mod addressing_mode;
+pub mod rom;
 
 use std::cell::RefCell;
 use std::rc::Rc;
