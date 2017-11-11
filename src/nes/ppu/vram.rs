@@ -125,20 +125,27 @@ impl Vram {
         }
     }
 
-    pub fn read_no_log(&mut self, addr: u16) -> u8 {
+    pub fn read_with_buffer(&mut self, addr: u16) -> u8 {
         let mut result = self.read_buffer;
         match addr {
             0x0000...0x3EFF => {
                 self.read_buffer = self.read_internal(addr);
             },
             0x3F00...0x3FFF => {
-                self.read_buffer = self.read_internal(addr);
-                result = self.read_buffer
+                // retrun direct value if palette address
+                // but buffering vram(addr - 0x1000) value
+                self.read_buffer = self.read_internal(addr - 0x1000);
+                result = self.read_internal(addr);
             },
             _ => {
                 panic!("cant read PPU:0x{:04x}", addr);
             }
         };
+        info!("read_with_buffer({:x}) buf:{:x} res:{:x}",
+              addr,
+              self.read_buffer,
+              result);
+
         result
     }
 
@@ -164,7 +171,7 @@ impl Vram {
 
     pub fn read(&mut self, addr: u16) -> u8 {
         info!("Vram::read({:04x})", addr);
-        self.read_no_log(addr)
+        self.read_with_buffer(addr)
     }
 
     pub fn get_addr(&self) -> u16 {
@@ -185,7 +192,6 @@ impl Vram {
     pub fn clear_addr(&mut self) {
         self.vram_write_addr = vec![0,0];
     }
-
 
     pub fn increment_addr(&mut self, value: u16) {
         let address = self.get_addr().wrapping_add(value);

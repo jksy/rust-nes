@@ -61,7 +61,7 @@ fn main() {
     // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/sprite_ram.nes").unwrap();
     // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/palette_ram.nes").unwrap();
     // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes").unwrap();
-    // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/vram_access.nes").unwrap();
+    let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/vram_access.nes").unwrap();
     // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/power_up_palette.nes").unwrap();
     rom.print();
     nes.set_rom(rom.clone());
