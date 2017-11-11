@@ -20,7 +20,6 @@ pub struct Ppu {
     status: u8,      // $2002(r)
     oam_address: u8, // $2003(w)
     scroll_position: Vec<u8>, //  $2005(w*2)
-    vram_write_addr: Vec<u8>, // $2006(w*2)
     vram: Vram,      // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
                      // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
                      // 0x2000-0x23FF:Name table1
@@ -38,8 +37,6 @@ pub struct Ppu {
     is_raise_nmi:    bool, // true:when raise interruput
     is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
-
-    buffered_data: u8,
 
     raw_bmp: Image,
 
@@ -153,13 +150,10 @@ impl Ppu {
             cycle:          0u64,
             current_line:  0,
             current_cycle: 0,
-            vram_write_addr: vec![0,0],
             scroll_position: vec![0,0],
             is_raise_nmi   : false,
             is_display_changed   : false,
             is_horizontal  : horizontal,
-
-            buffered_data: 0u8,
 
             raw_bmp:       Image::new(512, 480),
             mbc:           Weak::default(),
@@ -205,10 +199,10 @@ impl Ppu {
     }
 
     // TODO:no copy
-    fn read_vram_range(&self, start: u16, end: u16) -> Vec<u8> {
+    fn read_vram_range(&mut self, start: u16, end: u16) -> Vec<u8> {
         let mut v = vec![];
         for i in start..end {
-            v.push(self.vram.read_no_log(i));
+            v.push(self.vram.read_internal(i));
         }
         v
     }
@@ -288,7 +282,7 @@ impl Ppu {
         base + (x / 8) + (y / 8) * 32
     }
 
-    fn attriute_from_point(&self, x: u16, y: u16) -> u16 {
+    fn attribute_from_point(&mut self, x: u16, y: u16) -> u16 {
         let base = self.name_table_addr();
         let index_x = x / 64;
         let index_y = y / 4;
@@ -308,8 +302,8 @@ impl Ppu {
         let y = self.current_line + self.scroll_position[1] as u16;
         // render BG
         let addr = self.name_table_addr_from_point(x, y);
-        let attribute = self.attriute_from_point(x, y);
-        let pattern_index = self.vram.read(addr);
+        let attribute = self.attribute_from_point(x, y);
+        let pattern_index = self.vram.read_internal(addr);
         self.render_pattern_pixel(pattern_index,
                                   x, y,
                                   x, y,
@@ -357,7 +351,7 @@ impl Ppu {
         let index = pattern.pal_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
-        let pal_index = self.vram.read(palette_addr + index as u16) as usize +
+        let pal_index = self.vram.read_internal(palette_addr + index as u16) as usize +
                         ((attribute & 0x03)* 4) as usize;
         // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
 
@@ -386,24 +380,10 @@ impl Ppu {
                 self.oam_ram[self.oam_address as usize]
             },
             0x2007 => { // PPU_DATA
-                let mut address = self.vram_write_addr[0] as u16;
-                address |= (self.vram_write_addr[1] as u16) << 8;
-                // emulate internal buffering
-                let readed = self.vram.read(address);
-                let mut result;
-                if (address & 0x3F00) != 0x3F00 {
-                    result = self.buffered_data;
-                    self.buffered_data = readed;
-                } else {
-                    // return no buffer value if palette address
-                    result = readed;
-                    self.buffered_data = readed;
-                }
-
-                address += self.nametable_increment_value();
-                self.vram_write_addr[0] = (address & 0xFF) as u8;
-                self.vram_write_addr[1] = (address >> 8) as u8;
-                info!("buffered_data = {:x}, result = {:x}", self.buffered_data, result);
+                let address = self.vram.get_addr();
+                let result = self.vram.read(address);
+                let inc = self.nametable_increment_value();
+                self.vram.increment_addr(inc);
                 result
             },
             _ => panic!("PPU read error:#{:x}", addr)
@@ -414,9 +394,7 @@ impl Ppu {
         match addr {
             0x2000 => { // PPU_CTRL
                 self.control = data;
-                self.vram_write_addr.clear();
-                self.vram_write_addr.insert(0, 0);
-                self.vram_write_addr.insert(0, 0);
+                self.vram.clear_addr();
                 self.is_display_changed = true
             },
             0x2001 => { // PPU_MASK
@@ -444,22 +422,13 @@ impl Ppu {
                 self.is_display_changed = true;
             },
             0x2006 => { // PPU_ADDRESS
-                self.vram_write_addr.insert(0, data);
-                self.vram_write_addr.truncate(2);
-                info!("PPU VRAM write addr : 0x{:02x}{:02x}",
-                         self.vram_write_addr[1],
-                         self.vram_write_addr[0],
-                         );
+                self.vram.set_addr(data);
             },
             0x2007 => { // PPU_DATA
-                let mut address = self.vram_write_addr[0] as u16;
-                address |= (self.vram_write_addr[1] as u16) << 8;
-                info!("PPU write vram[{:x}] = {:x}", address, data);
+                let mut address = self.vram.get_addr();
                 self.vram.write(address, data);
-
-                address += self.nametable_increment_value();
-                self.vram_write_addr[0] = (address & 0xFF) as u8;
-                self.vram_write_addr[1] = (address >> 8) as u8;
+                let inc = self.nametable_increment_value();
+                self.vram.increment_addr(inc);
                 self.is_display_changed = true;
             },
             0x4014 => { // OAM_DMA

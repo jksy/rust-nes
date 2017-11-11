@@ -25,6 +25,9 @@ pub struct Vram {
     pattern_tables: Vec<PatternTable>,
     name_tables:    Vec<Rc<RefCell<Box<NameTable>>>>,
     palette_tables: Vec<Rc<RefCell<Box<PaletteTable>>>>,
+
+    vram_write_addr: Vec<u8>,
+    read_buffer: u8,
 }
 
 impl NameTable {
@@ -114,13 +117,32 @@ impl Vram {
         }
 
         Vram {
-            pattern_tables: pattern_tables,
-            name_tables:    name_tables,
-            palette_tables: palette_tables,
+            pattern_tables:  pattern_tables,
+            name_tables:     name_tables,
+            palette_tables:  palette_tables,
+            vram_write_addr: vec![0,0],
+            read_buffer:     0x00,
         }
     }
 
-    pub fn read_no_log(&self, addr: u16) -> u8 {
+    pub fn read_no_log(&mut self, addr: u16) -> u8 {
+        let mut result = self.read_buffer;
+        match addr {
+            0x0000...0x3EFF => {
+                self.read_buffer = self.read_internal(addr);
+            },
+            0x3F00...0x3FFF => {
+                self.read_buffer = self.read_internal(addr);
+                result = self.read_buffer
+            },
+            _ => {
+                panic!("cant read PPU:0x{:04x}", addr);
+            }
+        };
+        result
+    }
+
+    pub fn read_internal(&mut self, addr: u16) -> u8 {
         match addr {
             0x0000...0x1FFF => {
                 let (index, target_addr) = Vram::calclate_patterntable_addr(addr);
@@ -140,9 +162,35 @@ impl Vram {
         }
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn read(&mut self, addr: u16) -> u8 {
         info!("Vram::read({:04x})", addr);
         self.read_no_log(addr)
+    }
+
+    pub fn get_addr(&self) -> u16 {
+        let mut address = self.vram_write_addr[0] as u16;
+        address |= (self.vram_write_addr[1] as u16) << 8;
+        address
+    }
+
+    pub fn set_addr(&mut self, half_addr: u8) {
+        self.vram_write_addr.insert(0, half_addr);
+        self.vram_write_addr.truncate(2);
+        info!("PPU VRAM write addr : 0x{:02x}{:02x}",
+                 self.vram_write_addr[1],
+                 self.vram_write_addr[0],
+                 );
+    }
+
+    pub fn clear_addr(&mut self) {
+        self.vram_write_addr = vec![0,0];
+    }
+
+
+    pub fn increment_addr(&mut self, value: u16) {
+        let address = self.get_addr().wrapping_add(value);
+        self.vram_write_addr[0] = (address & 0xFF) as u8;
+        self.vram_write_addr[1] = (address >> 8) as u8;
     }
 
     pub fn write(&mut self, addr: u16, data: u8) {
