@@ -254,6 +254,7 @@ impl Ppu {
                 self.current_line = 0;
             }
         }
+
     }
 
     fn bg_addr(&self) -> u16 {
@@ -388,16 +389,21 @@ impl Ppu {
                 let mut address = self.vram_write_addr[0] as u16;
                 address |= (self.vram_write_addr[1] as u16) << 8;
                 // emulate internal buffering
-                let mut result = self.vram.read(address);
+                let readed = self.vram.read(address);
+                let mut result;
                 if (address & 0x3F00) != 0x3F00 {
-                    mem::swap(&mut result, &mut self.buffered_data);
+                    result = self.buffered_data;
+                    self.buffered_data = readed;
                 } else {
-                    self.buffered_data = result;
+                    // return no buffer value if palette address
+                    result = readed;
+                    self.buffered_data = readed;
                 }
 
                 address += self.nametable_increment_value();
                 self.vram_write_addr[0] = (address & 0xFF) as u8;
                 self.vram_write_addr[1] = (address >> 8) as u8;
+                info!("buffered_data = {:x}, result = {:x}", self.buffered_data, result);
                 result
             },
             _ => panic!("PPU read error:#{:x}", addr)
