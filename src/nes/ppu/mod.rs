@@ -145,19 +145,19 @@ impl Ppu {
             mask:          0u8,
             status:        0u8,
             oam_address:   0u8,
-            vram:         Vram::new(horizontal),
+            vram:          Vram::new(horizontal),
             oam_ram:       vec![0x00u8; 0x0100],
-            cycle:          0u64,
+            cycle:         0u64,
             current_line:  0,
             current_cycle: 0,
-            scroll_position: vec![0,0],
-            is_raise_nmi   : false,
-            is_display_changed   : false,
-            is_horizontal  : horizontal,
+            scroll_position:    vec![0,0],
+            is_raise_nmi:       false,
+            is_display_changed: false,
+            is_horizontal:      horizontal,
 
-            raw_bmp:       Image::new(512, 480),
-            mbc:           Weak::default(),
-            mapper:        mapper,
+            raw_bmp:  Image::new(512, 480),
+            mbc:      Weak::default(),
+            mapper:   mapper,
             tasks   : vec![],
         }
     }
@@ -183,6 +183,7 @@ impl Ppu {
 
     pub fn tick(&mut self) {
         self.cycle = self.cycle.wrapping_add(1);
+        info!("ppu cycle:{:}", self.cycle);
         if self.tasks.len() > 0 {
             let task = self.tasks.pop().unwrap();
             task.call(self);
@@ -220,19 +221,28 @@ impl Ppu {
     }
 
     fn process_cycle(&mut self) {
-        if self.current_line < 240 && self.current_cycle < 256 {
-            self.process_pixel();
-        }
+        info!("ppu ({:x}({}),{:x}({}))",
+                 self.current_cycle,
+                 self.current_cycle,
+                 self.current_line,
+                 self.current_line);
 
         if self.current_cycle == 1 {
             if self.current_line == 241 {
                 self.status |= STATUS_VBLANK; // on vblank flag
                 self.is_raise_nmi = true;
             }
-            if self.current_line == 261 {
-                self.status &= !STATUS_VBLANK; // clar vblank flag
+            if self.current_line == 260 {
                 self.is_raise_nmi = false;
             }
+            if self.current_line == 261 {
+                self.status &= !STATUS_VBLANK; // clear vblank flag
+                self.is_raise_nmi = false;
+            }
+        }
+
+        if self.current_line < 240 && self.current_cycle < 256 {
+            self.process_pixel();
         }
 
         // reset OAM address
@@ -248,7 +258,6 @@ impl Ppu {
                 self.current_line = 0;
             }
         }
-
     }
 
     fn bg_addr(&self) -> u16 {
@@ -289,7 +298,7 @@ impl Ppu {
         let index = index_x + index_y;
 
         let addr = base + index + 0x03C0;
-        let attr = self.vram.read(addr);
+        let attr = self.vram.read_internal(addr);
 
         let mut shift = (x / 8) % 2;
         shift += ((y / 8) % 2) * 2;

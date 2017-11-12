@@ -73,7 +73,7 @@ impl Nes {
             self.ppu.borrow_mut().cycle()
         };
 
-        if cpu_cycle > ppu_cycle * 3 {
+        if cpu_cycle * 3 > ppu_cycle {
             self.ppu.borrow_mut().tick();
         } else {
             self.cpu.tick();
