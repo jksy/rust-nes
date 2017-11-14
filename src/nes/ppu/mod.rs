@@ -322,7 +322,7 @@ impl Ppu {
         // render sprite
         self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
-            let sprite_y      = self.oam_ram[sprite_index * 4]     as u16;
+            let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
             let pattern_index = self.oam_ram[sprite_index * 4 + 1];
             let attr          = self.oam_ram[sprite_index * 4 + 2] as u16;
             let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
@@ -332,10 +332,13 @@ impl Ppu {
             if x < sprite_x || sprite_x + 8 < x {
                 continue;
             }
+            if (x - sprite_x) == 0 {
+                continue;
+            }
 
             // TODO:replace optimal palette addr
             self.render_pattern_pixel(pattern_index,
-                                      x - sprite_x, y - sprite_y,
+                                      x - sprite_x - 1, y - sprite_y,
                                       x, y,
                                       attr,
                                       0x3F10);

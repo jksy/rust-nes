@@ -68,11 +68,22 @@ impl PaletteTable {
     }
 
     fn read(&self, addr: u16) -> u8 {
+        let addr = PaletteTable::normalize_addr(addr);
         self.ram[addr as usize]
     }
 
     fn write(&mut self, addr: u16, data: u8) {
+        let addr = PaletteTable::normalize_addr(addr);
         self.ram[addr as usize] = data
+    }
+
+    fn normalize_addr(addr: u16) -> u16 {
+        // mirror 3F10/3F14/3F18/3F1C -> 3F00/3F14/3F18/3F1C
+        let mut addr = addr & 0x001F;
+        if addr % 4 == 0 {
+            addr &= !0x10;
+        }
+        addr
     }
 }
 
@@ -102,18 +113,10 @@ impl Vram {
         }
 
         let mut palette_tables = Vec::new();
-        for index in 0..8 {
-            let head = index * 4;
-            let initial_palette = &INITIAL_PALETTE_TABLE[head..(head+4)];
-            let table = Rc::new(RefCell::new(Box::new(PaletteTable::new(initial_palette))));
-            palette_tables.push(table);
-        }
+        let table = Rc::new(RefCell::new(Box::new(PaletteTable::new(&INITIAL_PALETTE_TABLE))));
         // mirror of palette 3F00~3F1F (3F20)-(3FFF)
-        for _ in 0..8 {
-            for i in 0..8 {
-                let p = palette_tables[i].clone();
-                palette_tables.push(p);
-            }
+        for index in 0..8 {
+            palette_tables.push(table.clone());
         }
 
         Vram {
@@ -235,8 +238,8 @@ impl Vram {
     }
 
     fn calclate_palettetable_addr(addr : u16) -> (usize, u16) {
-        let index       = (addr - 0x3F00) / 0x0004;
-        let target_addr = (addr - 0x3F00) % 0x0004;
+        let index       = (addr - 0x3F00) / 0x0020;
+        let target_addr = (addr - 0x3F00) % 0x0020;
 
         (index as usize, target_addr)
     }

@@ -752,15 +752,11 @@ impl Cpu {
     pub fn tick(&mut self) {
         self.debug();
 
-        if self.process_nmi() {
-            return;
-        }
+        self.process_nmi();
 
         let before_status = self.clone();
-
         let opcode = self.read(self.pc);
         self.pc += 1;
-
         self.process_opcode(opcode);
 
         self.print_diff(before_status);
@@ -768,7 +764,6 @@ impl Cpu {
 
     fn process_opcode(&mut self, opcode: u8) {
         let cont = match opcode {
-            // 0x00 => {let m = self.implicit();    self.brk(m) },
             0x00 => { instruction!(self, implicit,    brk, 7, 0) },
             0x01 => { instruction!(self, indirectx,   ora, 6, 0) },
             0x02 => { instruction!(self, immediate,   kil, 2, 0) },
