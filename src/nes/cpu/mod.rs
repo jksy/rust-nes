@@ -752,7 +752,9 @@ impl Cpu {
     pub fn tick(&mut self) {
         self.debug();
 
-        self.process_nmi();
+        if self.process_nmi() {
+            return;
+        }
 
         let before_status = self.clone();
         let opcode = self.read(self.pc);

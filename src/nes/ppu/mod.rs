@@ -112,7 +112,7 @@ const PALETTES: [[u8;3]; 64] = [
 
 #[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 #[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
-#[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE     :u8 = 0x20;  // 0:$0000, 1:$1000
+#[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE_16  :u8 = 0x20;  // 0:8x8, 1:8x16
 #[allow(dead_code)] const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
 #[allow(dead_code)] const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
 #[allow(dead_code)] const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
@@ -168,7 +168,7 @@ impl Ppu {
 
     pub fn setup(&mut self) {
         // copy chr from rom
-        // TODO: directry read from rom
+        // TODO: directr read from rom
         let mapper = self.mapper.borrow();
         let chr_rom = mapper.chr_rom();
         for i in 0..chr_rom.len() {
@@ -260,7 +260,7 @@ impl Ppu {
         }
     }
 
-    fn bg_addr(&self) -> u16 {
+    fn bg_pattern_addr(&self) -> u16 {
         if (self.control & CONTROL_MASK_BG_ADDRESS) != 0 {
             0x1000u16
         } else {
@@ -268,12 +268,16 @@ impl Ppu {
         }
     }
 
-    fn pattern_addr(&self) -> u16 {
+    fn sprite_pattern_addr(&self) -> u16 {
         if (self.control & CONTROL_MASK_SPRITE_ADDRESS) != 0 {
             0x1000u16
         } else {
             0x0000u16
         }
+    }
+
+    fn sprite_size_16(&self) -> bool {
+        (self.control & CONTROL_MASK_SPRITE_SIZE_16) != 0
     }
 
     fn name_table_addr(&self) -> u16 {
@@ -309,17 +313,26 @@ impl Ppu {
     fn process_pixel(&mut self) {
         let x = self.current_cycle + self.scroll_position[0] as u16;
         let y = self.current_line + self.scroll_position[1] as u16;
+
+        info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
         // render BG
         let addr = self.name_table_addr_from_point(x, y);
         let attribute = self.attribute_from_point(x, y);
         let pattern_index = self.vram.read_internal(addr);
-        self.render_pattern_pixel(pattern_index,
+        let bg_pattern_addr = self.bg_pattern_addr();
+        info!("bg addr:{:04x}, attr:{:x}, pat_index:{:04x}",
+              addr,
+              attribute,
+              pattern_index);
+        self.render_pattern_pixel(bg_pattern_addr,
+                                  pattern_index,
                                   x, y,
                                   x, y,
                                   attribute,
                                   0x3F00); // TODO:replace optimal palette addr
 
         // render sprite
+        let sprite_pattern_base = self.sprite_pattern_addr();
         self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
             let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
@@ -337,7 +350,8 @@ impl Ppu {
             }
 
             // TODO:replace optimal palette addr
-            self.render_pattern_pixel(pattern_index,
+            self.render_pattern_pixel(sprite_pattern_base,
+                                      pattern_index,
                                       x - sprite_x - 1, y - sprite_y,
                                       x, y,
                                       attr,
@@ -349,6 +363,7 @@ impl Ppu {
     }
 
     fn render_pattern_pixel(&mut self,
+                            pattern_base: u16,
                             pattern_index: u8,
                             pattern_x: u16,
                             pattern_y: u16,
@@ -356,16 +371,21 @@ impl Ppu {
                             y: u16,
                             attribute: u16,
                             palette_addr: u16) {
-        let pattern_addr = (pattern_index as u16) * 2 * 8 + self.pattern_addr();
+        let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
         let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
         let pattern = Pattern::new(&memory);
 
         let index = pattern.pal_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
+        info!("pattern:addr:0x{:04x}, index:{:02x}", pattern_addr, pattern_index);
+
         let pal_index = self.vram.read_internal(palette_addr + index as u16) as usize +
                         ((attribute & 0x03)* 4) as usize;
         // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
+        info!("palette:addr:0x{:04x}, index:{:02x}",
+              palette_addr + index as u16,
+              pattern_index);
 
         let color = PALETTES[pal_index];
         let pixel = Pixel::new(color[0], color[1], color[2]);
@@ -406,7 +426,6 @@ impl Ppu {
         match addr {
             0x2000 => { // PPU_CTRL
                 self.control = data;
-                self.vram.clear_addr();
                 self.is_display_changed = true
             },
             0x2001 => { // PPU_MASK
@@ -510,7 +529,7 @@ impl OamDmaTask {
               self.source,
               self.source + 0x0100u16);
         // TODO:bulk copy
-        for i in 0..0xFFu16 {
+        for i in 0..0x0100u16 {
             let s = (self.source + i) as u16;
             let t = (self.target + i) as usize;
             let mbc = ppu.mbc.upgrade().unwrap();
