@@ -52,8 +52,8 @@ const PRG_BLOCK_SIZE: usize = 16 * 1024;
 const CHR_BLOCK_SIZE: usize = 8 * 1024;
 
 impl Rom {
-    pub fn load(filename: &str) -> Result<(Box<Rom>), std::io::Error> {
-        let mut file = File::open(filename)?;
+    pub fn load<S: Into<String>>(filename: S) -> Result<(Box<Rom>), std::io::Error> {
+        let mut file = File::open(filename.into())?;
         let header = Rom::load_header(&mut file)?;
 
         let mut prg = BytesMut::with_capacity(PRG_BLOCK_SIZE * header.prg_page_count as usize);
@@ -101,7 +101,6 @@ impl Rom {
         } else {
             self.prg[addr as usize]
         }
-        // self.chr[addr]
     }
 
     pub fn chr(&self) -> &[u8] {

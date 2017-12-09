@@ -60,14 +60,6 @@ impl Nes {
     }
 
     pub fn tick(&mut self) {
-        // {
-        //     // info!("ppu.tick()");
-        //     let mut ppu = self.ppu.borrow_mut();
-        //     ppu.tick();
-        //     ppu.tick();
-        //     ppu.tick();
-        // }
-        // self.cpu.tick();
         let cpu_cycle = self.cpu.cycle();
         let ppu_cycle = {
             self.ppu.borrow_mut().cycle()
@@ -105,5 +97,4 @@ impl Nes {
     pub fn set_joypad_button_state(&self, state: u8) {
         self.joypad.borrow_mut().set_button_state(state);
     }
-
 }

@@ -18,13 +18,29 @@ use sdl2::render::Canvas;
 use sdl2::render::Texture;
 use sdl2::video::Window;
 use std::collections::HashSet;
+use std::env;
+use std::io::{self, Write};
+use std::process::exit;
 use std::rc::Rc;
 use std::time::SystemTime;
 use std::{thread, time};
 
-fn main() {
-    let sdl_context = sdl2::init().unwrap();
+fn get_rom_filename() -> Result<(String), (String)> {
+    if env::args().count() != 2 {
+        return Err("need only one argument".to_owned());
+    }
+    Ok(env::args().nth(1).unwrap())
+}
+
+fn run_nes() -> Result<(), (String)> {
     env_logger::init().unwrap();
+
+    if env::args().count() != 2 {
+        return Err("need only one argument".to_owned());
+    }
+    let rom_filename = get_rom_filename().unwrap();
+
+    let sdl_context = sdl2::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
@@ -46,23 +62,7 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut nes = Nes::new();
-    // let rom = Rom::load("roms/scanline.nes").unwrap();
-    // let rom = Rom::load("roms/branch_timing_tests/1.Branch_Basics.nes").unwrap();
-    // let rom = Rom::load("roms/dk.nes").unwrap();
-    // let rom = Rom::load("roms/smb.nes").unwrap();
-    // let rom = Rom::load("roms/color_test.nes").unwrap();
-    // let rom = Rom::load("roms/full_palette.nes").unwrap();
-    // let rom = Rom::load("branch_timing_tests/1.Branch_Basics.nes").unwrap();
-    let rom = Rom::load("roms/nestest.nes").unwrap();
-    // let rom = Rom::load("roms/ram_retain.nes").unwrap();
-    // let rom = Rom::load("roms/cpu_dummy_reads.nes").unwrap();
-    // let rom = Rom::load("roms/coredump.nes").unwrap();
-    // let rom = Rom::load("roms/ram_retain.nes").unwrap();
-    // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/sprite_ram.nes").unwrap();
-    // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/palette_ram.nes").unwrap();
-    // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/vbl_clear_time.nes").unwrap();
-    let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/vram_access.nes").unwrap();
-    // let rom = Rom::load("roms/blargg_ppu_tests_2005.09.15b/power_up_palette.nes").unwrap();
+    let rom = Rom::load(rom_filename).unwrap();
     rom.print();
     nes.set_rom(rom.clone());
     nes.reset();
@@ -126,7 +126,8 @@ fn main() {
         prev_render_time = SystemTime::now();
         // dumping ram & ppu
         nes.dump();
-    }
+    };
+    Ok(())
 }
 
 fn get_button_state(events: &sdl2::EventPump) -> u8 {
@@ -157,7 +158,6 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
 
 fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, texture: &mut Texture) {
     nes.render_image(img);
-    let _ = img.save("x.bmp");
 
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
         for y in 0u32..240u32 {
@@ -172,5 +172,15 @@ fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, t
     }).unwrap();
     canvas.copy(&texture, None, Some(Rect::new(0, 0, 255, 239))).unwrap();
     canvas.present();
+}
+
+fn main() {
+    ::std::process::exit(match run_nes() {
+        Ok(_) => 0,
+        Err(err) => {
+            writeln!(io::stderr(), "error: {:?}", err).unwrap();
+            1
+        }
+    });
 }
 
