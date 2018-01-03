@@ -297,11 +297,12 @@ impl Ppu {
 
     fn attribute_from_point(&mut self, x: u16, y: u16) -> u16 {
         let base = self.name_table_addr();
-        let index_x = x / 64;
-        let index_y = y / 4;
+        let index_x = x / 32;
+        let index_y = y / 32;
         let index = index_x + index_y;
 
         let addr = base + index + 0x03C0;
+        info!("attr addr:{:x}", addr);
         let attr = self.vram.read_internal(addr);
 
         let mut shift = (x / 8) % 2;
