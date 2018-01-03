@@ -298,7 +298,7 @@ impl Ppu {
     fn attribute_from_point(&mut self, x: u16, y: u16) -> u16 {
         let base = self.name_table_addr();
         let index_x = x / 32;
-        let index_y = y / 32;
+        let index_y = (y / 32) * 8;
         let index = index_x + index_y;
 
         let addr = base + index + 0x03C0;
@@ -379,12 +379,12 @@ impl Ppu {
         let index = pattern.pal_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
-        info!("pattern:addr:0x{:04x}, index:{:02x}", pattern_addr, pattern_index);
+        info!("pattern:addr:0x{:04x}, pattern_index:{:02x}", pattern_addr, pattern_index);
 
         let pal_index = self.vram.read_internal(palette_addr + index as u16) as usize +
                         ((attribute & 0x03)* 4) as usize;
         // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
-        info!("palette:addr:0x{:04x}, index:{:02x}",
+        info!("palette:addr:0x{:04x}, palette_index:{:02x}",
               palette_addr + index as u16,
               pattern_index);
 
