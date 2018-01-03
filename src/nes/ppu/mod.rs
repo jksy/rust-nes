@@ -43,7 +43,7 @@ pub struct Ppu {
     tasks: Vec<Box<OamDmaTask>>,
 }
 
-const PALETTES: [[u8;3]; 64] = [
+const PALETTE_COLORS: [[u8;3]; 64] = [
     [0x7Cu8, 0x7Cu8, 0x7Cu8],
     [0x00u8, 0x00u8, 0xFCu8],
     [0x00u8, 0x00u8, 0xBCu8],
@@ -295,7 +295,7 @@ impl Ppu {
         base + (x / 8) + (y / 8) * 32
     }
 
-    fn attribute_from_point(&mut self, x: u16, y: u16) -> u16 {
+    fn attribute_from_point(&mut self, x: u16, y: u16) -> u8 {
         let base = self.name_table_addr();
         let index_x = x / 32;
         let index_y = (y / 32) * 8;
@@ -304,11 +304,7 @@ impl Ppu {
         let addr = base + index + 0x03C0;
         info!("attr addr:{:x}", addr);
         let attr = self.vram.read_internal(addr);
-
-        let mut shift = (x / 8) % 2;
-        shift += ((y / 8) % 2) * 2;
-
-        ((attr >> shift) & 0x03) as u16
+        attr
     }
 
     fn process_pixel(&mut self) {
@@ -317,19 +313,19 @@ impl Ppu {
 
         info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
         // render BG
-        let addr = self.name_table_addr_from_point(x, y);
-        let attribute = self.attribute_from_point(x, y);
-        let pattern_index = self.vram.read_internal(addr);
+        let nametable_addr = self.name_table_addr_from_point(x, y);
+        let attribute = Attribute::new(self.attribute_from_point(x, y));
+        let pattern_index = self.vram.read_internal(nametable_addr);
         let bg_pattern_addr = self.bg_pattern_addr();
-        info!("bg addr:{:04x}, attr:{:x}, pat_index:{:04x}",
-              addr,
+        info!("nametable_addr:{:04x}, attr:{:?}, pat_index:{:04x}",
+              nametable_addr,
               attribute,
               pattern_index);
         self.render_pattern_pixel(bg_pattern_addr,
                                   pattern_index,
                                   x, y,
                                   x, y,
-                                  attribute,
+                                  attribute.palette_index(x, y),
                                   0x3F00); // TODO:replace optimal palette addr
 
         // render sprite
@@ -388,7 +384,7 @@ impl Ppu {
               palette_addr + index as u16,
               pattern_index);
 
-        let color = PALETTES[pal_index];
+        let color = PALETTE_COLORS[pal_index];
         let pixel = Pixel::new(color[0], color[1], color[2]);
         self.raw_bmp.set_pixel(x as u32,
                                y as u32,
@@ -492,6 +488,7 @@ impl Ppu {
     }
 }
 
+#[derive(Debug)]
 struct Pattern<'a> {
     low:  &'a [u8],
     high: &'a [u8],
@@ -506,6 +503,23 @@ impl<'a> Pattern<'a> {
         let low = self.low[y as usize] << x & 0x80;
         let high = self.high[y as usize] << x & 0x80;
         low >> 7 | high >> 6
+    }
+}
+
+#[derive(Debug)]
+struct Attribute {
+    attribute: u8,
+}
+
+impl Attribute {
+    fn new(attr: u8) -> Self {
+        Attribute{attribute: attr}
+    }
+
+    pub fn palette_index(self, x: u16, y: u16) -> u16 {
+        let mut shift = (x / 8) % 2;
+        shift += ((y / 8) % 2) * 2;
+        ((self.attribute >> shift) & 0x03) as u16
     }
 }
 
@@ -544,3 +558,4 @@ impl OamDmaTask {
         ppu.is_display_changed = true;
     }
 }
+
