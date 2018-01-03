@@ -8,6 +8,7 @@ pub trait AddressingMode {
     fn read16_addr(&self, cpu: &mut Cpu) -> u16 { unimplemented!() }
 
     fn length(&self) -> u16 { unimplemented!() }
+    fn is_page_crossed(&self) -> bool { false /* unimplemented!() */ }
 }
 
 pub struct NoAccessAddressingMode {}

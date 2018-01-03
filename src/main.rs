@@ -6,27 +6,41 @@ extern crate bmp;
 extern crate log;
 extern crate env_logger;
 
-use nes::rom::Rom;
+use bmp::Image;
 use nes::Nes;
 use nes::joypad;
-use std::sync::mpsc::channel;
-use bmp::Image;
+use nes::rom::Rom;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::event::Event;
-use sdl2::EventPump;
-use sdl2::keyboard::Keycode;
-use sdl2::keyboard::Scancode;
+use sdl2::render::Canvas;
 use sdl2::render::Texture;
 use sdl2::video::Window;
-use sdl2::render::Canvas;
 use std::collections::HashSet;
+use std::env;
+use std::io::{self, Write};
+use std::process::exit;
+use std::rc::Rc;
+use std::time::SystemTime;
 use std::{thread, time};
-use std::time::{SystemTime, UNIX_EPOCH};
 
-fn main() {
-    let sdl_context = sdl2::init().unwrap();
+fn get_rom_filename() -> Result<(String), (String)> {
+    if env::args().count() != 2 {
+        return Err("need only one argument".to_owned());
+    }
+    Ok(env::args().nth(1).unwrap())
+}
+
+fn run_nes() -> Result<(), (String)> {
     env_logger::init().unwrap();
+
+    if env::args().count() != 2 {
+        return Err("need only one argument".to_owned());
+    }
+    let rom_filename = get_rom_filename().unwrap();
+
+    let sdl_context = sdl2::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
@@ -48,21 +62,16 @@ fn main() {
     let mut events = sdl_context.event_pump().unwrap();
 
     let mut nes = Nes::new();
-    // let rom = Rom::load("color_test.nes").unwrap();
-    let rom = Rom::load("nestest.nes").unwrap();
-    // let rom = Rom::load("ram_retain.nes").unwrap();
-    // let rom = Rom::load("cpu_dummy_reads.nes").unwrap();
+    let rom = Rom::load(rom_filename).unwrap();
     rom.print();
     nes.set_rom(rom.clone());
     nes.reset();
 
-    let mut counter = 0;
     let mut texture = creator.
         create_texture_streaming(PixelFormatEnum::RGB888, 256, 240).unwrap();
 
     let mut slow = false;
     let mut prev_render_time = SystemTime::now();
-    let mut prev_keyboard_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
     let mut img = Image::new(256, 240);
@@ -87,7 +96,6 @@ fn main() {
         }
 
         if button_state_changed {
-            info!("getting button state");
             button_state = get_button_state(&events);
             button_state_changed = false;
         }
@@ -100,7 +108,6 @@ fn main() {
         }
 
         // update canvas if display changed
-        let result = nes.is_display_changed();
         if nes.is_display_changed() == false {
             continue;
         }
@@ -117,7 +124,10 @@ fn main() {
         // draw nes display
         nes.clear_display_changed();
         prev_render_time = SystemTime::now();
-    }
+        // dumping ram & ppu
+        nes.dump();
+    };
+    Ok(())
 }
 
 fn get_button_state(events: &sdl2::EventPump) -> u8 {
@@ -148,7 +158,6 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
 
 fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, texture: &mut Texture) {
     nes.render_image(img);
-    img.save("x.bmp");
 
     texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
         for y in 0u32..240u32 {
@@ -163,5 +172,15 @@ fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, t
     }).unwrap();
     canvas.copy(&texture, None, Some(Rect::new(0, 0, 255, 239))).unwrap();
     canvas.present();
+}
+
+fn main() {
+    ::std::process::exit(match run_nes() {
+        Ok(_) => 0,
+        Err(err) => {
+            writeln!(io::stderr(), "error: {:?}", err).unwrap();
+            1
+        }
+    });
 }
 

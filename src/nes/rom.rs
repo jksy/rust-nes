@@ -49,11 +49,11 @@ pub struct Rom {
 }
 
 const PRG_BLOCK_SIZE: usize = 16 * 1024;
-const CHR_BLOCK_SIZE: usize = 16 * 1024;
+const CHR_BLOCK_SIZE: usize = 8 * 1024;
 
 impl Rom {
-    pub fn load(filename: &str) -> Result<(Box<Rom>), std::io::Error> {
-        let mut file = File::open(filename)?;
+    pub fn load<S: Into<String>>(filename: S) -> Result<(Box<Rom>), std::io::Error> {
+        let mut file = File::open(filename.into())?;
         let header = Rom::load_header(&mut file)?;
 
         let mut prg = BytesMut::with_capacity(PRG_BLOCK_SIZE * header.prg_page_count as usize);
@@ -88,18 +88,19 @@ impl Rom {
         info!("chr_page_count:{}", self.header.chr_page_count);
         info!("mapper_no:{}", self.header.mapper_no());
         info!("flags6:{}", self.header.flags6);
+        info!("is_horizontal:{}", self.is_horizontal());
+        info!("has_trainer:{}", self.has_trainer());
         info!("PRG Len:{}", self.prg.len());
         info!("CHR Len:{}", self.chr.len());
     }
 
-    pub fn read(&self, addr: u16) -> u8 {
+    pub fn read_prg(&self, addr: u16) -> u8 {
         if self.header.prg_page_count == 1 {
             let x = addr & 0x3FFF;
             self.prg[x as usize]
         } else {
             self.prg[addr as usize]
         }
-        // self.chr[addr]
     }
 
     pub fn chr(&self) -> &[u8] {
@@ -120,6 +121,14 @@ impl Rom {
         }
 
         pc
+    }
+
+    pub fn is_horizontal(&self) -> bool {
+        self.header.is_horizontal()
+    }
+
+    pub fn has_trainer(&self) -> bool {
+        self.header.has_trainer()
     }
 
     fn load_header(file: &mut File) -> Result<(RomHeader), std::io::Error> {

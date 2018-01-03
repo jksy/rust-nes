@@ -1,14 +1,11 @@
-extern crate timer;
-extern crate chrono;
 extern crate bmp;
 
 mod cpu;
-pub mod rom;
+mod mapper;
 mod mbc;
 mod ppu;
 pub mod joypad;
-mod mapper;
-mod addressing_mode;
+pub mod rom;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -17,11 +14,7 @@ use nes::mbc::Mbc;
 use nes::joypad::Joypad;
 use nes::ppu::Ppu;
 use nes::mapper::Mapper;
-use std::sync::mpsc::channel;
-use std::sync::mpsc::Sender;
 use nes::bmp::Image;
-use std::thread;
-use std::time;
 
 pub struct Nes {
     cpu: Cpu,
@@ -31,7 +24,7 @@ pub struct Nes {
     // tick: u32,
 }
 
-macro_rules !wrap_with_rc {
+macro_rules !wrap_rc {
     ($value: expr) => {
         Rc::new(RefCell::new(Box::new($value)));
     }
@@ -39,10 +32,12 @@ macro_rules !wrap_with_rc {
 
 impl Nes {
     pub fn new() -> Self {
-        let mapper = wrap_with_rc!(Mapper::new());
-        let ppu    = wrap_with_rc!(Ppu::new(mapper.clone()));
-        let joypad = wrap_with_rc!(Joypad::new());
-        let mbc    = wrap_with_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+        let mapper = wrap_rc!(Mapper::new());
+        let ppu    = wrap_rc!(Ppu::new(mapper.clone()));
+        let joypad = wrap_rc!(Joypad::new());
+        let mbc    = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+
+        ppu.borrow_mut().set_mbc(Rc::downgrade(&mbc));
         let cpu = Cpu::new(mbc.clone());
 
         Nes{
@@ -59,20 +54,28 @@ impl Nes {
         }
     }
 
+    pub fn dump(&self) {
+        self.mbc.borrow_mut().dump_ram();
+        self.ppu.borrow_mut().dump();
+    }
+
     pub fn tick(&mut self) {
-        {
-            // info!("ppu.tick()");
-            let mut ppu = self.ppu.borrow_mut();
-            ppu.tick();
-            ppu.tick();
-            ppu.tick();
+        let cpu_cycle = self.cpu.cycle();
+        let ppu_cycle = {
+            self.ppu.borrow_mut().cycle()
+        };
+
+        if cpu_cycle * 3 > ppu_cycle {
+            self.ppu.borrow_mut().tick();
+        } else {
+            self.cpu.tick();
         }
-        self.cpu.tick();
     }
 
     pub fn set_rom(&mut self, rom: Box<rom::Rom>) {
         self.mbc.borrow_mut().set_rom(rom);
         self.cpu.setup();
+        self.ppu.borrow_mut().setup();
     }
 
     pub fn reset(&mut self) {
@@ -94,5 +97,4 @@ impl Nes {
     pub fn set_joypad_button_state(&self, state: u8) {
         self.joypad.borrow_mut().set_button_state(state);
     }
-
 }
