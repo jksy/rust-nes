@@ -40,7 +40,7 @@ impl NameTable {
     }
 
     fn write(&mut self, addr: u16, data: u8) {
-        info!("{:04x},{:02x}", addr, data);
+        info!("Vram::write {:04x},{:02x}", addr, data);
         self.ram[addr as usize] = data
     }
 }
@@ -144,22 +144,23 @@ impl Vram {
                 panic!("cant read PPU:0x{:04x}", addr);
             }
         };
-        info!("read_with_buffer({:x}) buf:{:x} res:{:x}",
-              addr,
-              self.read_buffer,
-              result);
+        // info!("read_with_buffer({:x}) buf:{:x} res:{:x}",
+        //       addr,
+        //       self.read_buffer,
+        //       result);
 
         result
     }
 
     pub fn read_internal(&mut self, addr: u16) -> u8 {
-        match addr {
+        let result = match addr {
             0x0000...0x1FFF => {
                 let (index, target_addr) = Vram::calclate_patterntable_addr(addr);
                 self.pattern_tables[index].read(target_addr)
             },
             0x2000...0x3EFF => {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
+                info!("nametable[{:x}][{:x}]", index, target_addr);
                 self.name_tables[index].borrow().read(target_addr)
             },
             0x3F00...0x3FFF => {
@@ -169,7 +170,10 @@ impl Vram {
             _ => {
                 panic!("cant read PPU:0x{:04x}", addr);
             }
-        }
+        };
+        // info!("result:{:x}", result);
+
+        result
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
@@ -211,6 +215,7 @@ impl Vram {
             },
             0x2000...0x3E00 => {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
+                info!("nametable[{:x}][{:x}]", index, target_addr);
                 self.name_tables[index].borrow_mut().write(target_addr, data)
             },
             0x3F00...0x3FFF => {

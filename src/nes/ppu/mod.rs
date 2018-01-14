@@ -110,6 +110,8 @@ const PALETTE_COLORS: [[u8;3]; 64] = [
     [0x00u8, 0x00u8, 0x00u8],
 ];
 
+const PALETTE_BASE_ADDR :u16 = 0x3F00;
+
 #[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 #[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
 #[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE_16  :u8 = 0x20;  // 0:8x8, 1:8x16
@@ -168,7 +170,7 @@ impl Ppu {
 
     pub fn setup(&mut self) {
         // copy chr from rom
-        // TODO: directr read from rom
+        // TODO: direct read from rom
         let mapper = self.mapper.borrow();
         let chr_rom = mapper.chr_rom();
         for i in 0..chr_rom.len() {
@@ -317,16 +319,17 @@ impl Ppu {
         let attribute = Attribute::new(self.attribute_from_point(x, y));
         let pattern_index = self.vram.read_internal(nametable_addr);
         let bg_pattern_addr = self.bg_pattern_addr();
+
         info!("nametable_addr:{:04x}, attr:{:?}, pat_index:{:04x}",
               nametable_addr,
               attribute,
               pattern_index);
+
         self.render_pattern_pixel(bg_pattern_addr,
                                   pattern_index,
                                   x, y,
                                   x, y,
-                                  attribute.palette_index(x, y),
-                                  0x3F00); // TODO:replace optimal palette addr
+                                  &attribute);
 
         // render sprite
         let sprite_pattern_base = self.sprite_pattern_addr();
@@ -334,7 +337,7 @@ impl Ppu {
         for sprite_index in 0..64 {
             let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
             let pattern_index = self.oam_ram[sprite_index * 4 + 1];
-            let attr          = self.oam_ram[sprite_index * 4 + 2] as u16;
+            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
             let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
             if y < sprite_y || sprite_y + 8 < y {
                 continue;
@@ -351,8 +354,7 @@ impl Ppu {
                                       pattern_index,
                                       x - sprite_x - 1, y - sprite_y,
                                       x, y,
-                                      attr,
-                                      0x3F10);
+                                      &attr);
             if sprite_index == 0 {
                 self.status |= STATUS_SPRITE; // set sprite zero hit
             }
@@ -366,25 +368,25 @@ impl Ppu {
                             pattern_y: u16,
                             x: u16,
                             y: u16,
-                            attribute: u16,
-                            palette_addr: u16) {
+                            attribute: &Attribute
+                            ) {
         let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
         let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
         let pattern = Pattern::new(&memory);
 
-        let index = pattern.pal_index((pattern_x & 0x07) as u8,
+        let color_index = pattern.color_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
         info!("pattern:addr:0x{:04x}, pattern_index:{:02x}", pattern_addr, pattern_index);
 
-        let pal_index = self.vram.read_internal(palette_addr + index as u16) as usize +
-                        ((attribute & 0x03)* 4) as usize;
-        // let pal_index = self.vram.read(palette_addr + index as u16) as usize;
-        info!("palette:addr:0x{:04x}, palette_index:{:02x}",
-              palette_addr + index as u16,
-              pattern_index);
+        let tile_color = attribute.table_color(pattern_x, pattern_y) | color_index;
+        let palette_index = self.vram.read_internal(PALETTE_BASE_ADDR + tile_color as u16) & 0x3f;
+        self.put_pixel(palette_index, x, y);
+    }
 
-        let color = PALETTE_COLORS[pal_index];
+    #[inline(always)]
+    fn put_pixel(&mut self, palette_index: u8, x: u16, y: u16) {
+        let color = PALETTE_COLORS[palette_index as usize];
         let pixel = Pixel::new(color[0], color[1], color[2]);
         self.raw_bmp.set_pixel(x as u32,
                                y as u32,
@@ -499,7 +501,7 @@ impl<'a> Pattern<'a> {
         Pattern{low: &data[0..8], high: &data[8..16]}
     }
 
-    pub fn pal_index(&self, x: u8, y: u8) -> u8 {
+    pub fn color_index(&self, x: u8, y: u8) -> u8 {
         let low = self.low[y as usize] << x & 0x80;
         let high = self.high[y as usize] << x & 0x80;
         low >> 7 | high >> 6
@@ -516,10 +518,15 @@ impl Attribute {
         Attribute{attribute: attr}
     }
 
-    pub fn palette_index(self, x: u16, y: u16) -> u16 {
-        let mut shift = (x / 8) % 2;
-        shift += ((y / 8) % 2) * 2;
-        ((self.attribute >> shift) & 0x03) as u16
+    #[inline(always)]
+    pub fn table_color(&self, pattern_x: u16, pattern_y: u16) -> u8 {
+        let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
+            (true,  true)  => self.attribute & 0x03,
+            (false, true)  => (self.attribute >> 2) & 0x03,
+            (true,  false) => (self.attribute >> 4) & 0x03,
+            (false, false) => (self.attribute >> 6) & 0x03,
+        };
+        attr_table_color << 2
     }
 }
 
