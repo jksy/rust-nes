@@ -203,7 +203,7 @@ impl Ppu {
 
     // TODO:no copy
     fn read_vram_range(&mut self, start: u16, end: u16) -> Vec<u8> {
-        let mut v = vec![];
+        let mut v = Vec::with_capacity((end - start) as usize);
         for i in start..end {
             v.push(self.vram.read_internal(i));
         }
