@@ -39,6 +39,7 @@ fn run_nes() -> Result<(), (String)> {
         return Err("need only one argument".to_owned());
     }
     let rom_filename = get_rom_filename().unwrap();
+    // let rom_filename = "./roms/smb.nes";
 
     let sdl_context = sdl2::init().unwrap();
 
@@ -125,7 +126,7 @@ fn run_nes() -> Result<(), (String)> {
         nes.clear_display_changed();
         prev_render_time = SystemTime::now();
         // dumping ram & ppu
-        nes.dump();
+        // nes.dump();
     };
     Ok(())
 }

@@ -203,10 +203,13 @@ impl Ppu {
 
     // TODO:no copy
     fn read_vram_range(&mut self, start: u16, end: u16) -> Vec<u8> {
-        let mut v = Vec::with_capacity((end - start) as usize);
-        for i in start..end {
-            v.push(self.vram.read_internal(i));
+        let size = (end - start) as usize;
+        let mut v = Vec::with_capacity(size);
+        unsafe {
+            v.set_len(size);
         }
+        info!("v:{:?}, v.len:{:?}", v, v.len());
+        self.vram.read_internal_range(start..end, &mut v);
         v
     }
 
@@ -336,8 +339,6 @@ impl Ppu {
         self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
             let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
-            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
-            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
             let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
             if y < sprite_y || sprite_y + 8 < y {
                 continue;
@@ -348,6 +349,9 @@ impl Ppu {
             if (x - sprite_x) == 0 {
                 continue;
             }
+
+            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
+            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
 
             // TODO:replace optimal palette addr
             self.render_pattern_pixel(sprite_pattern_base,
