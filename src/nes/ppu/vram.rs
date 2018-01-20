@@ -185,6 +185,8 @@ impl Vram {
         result
     }
 
+    // copy memory from vram
+    // dont check the memory type. PaletteTable, PatternTable, NameTable
     pub fn read_internal_range(&mut self, range: Range<u16>, vec: &mut Vec<u8>) {
         match range.start {
             0x0000...0x1FFF => {
