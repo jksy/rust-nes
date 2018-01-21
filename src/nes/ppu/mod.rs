@@ -111,6 +111,7 @@ const PALETTE_COLORS: [[u8;3]; 64] = [
 ];
 
 const PALETTE_BASE_ADDR :u16 = 0x3F00;
+const PALETTE_SPRITE_ADDR :u16 = 0x3F10;
 
 #[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 #[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
@@ -332,7 +333,8 @@ impl Ppu {
                                   pattern_index,
                                   x, y,
                                   x, y,
-                                  &attribute);
+                                  &attribute,
+                                  false);
 
         // render sprite
         let sprite_pattern_base = self.sprite_pattern_addr();
@@ -358,7 +360,8 @@ impl Ppu {
                                       pattern_index,
                                       x - sprite_x - 1, y - sprite_y,
                                       x, y,
-                                      &attr);
+                                      &attr,
+                                      true);
             if sprite_index == 0 {
                 self.status |= STATUS_SPRITE; // set sprite zero hit
             }
@@ -372,7 +375,8 @@ impl Ppu {
                             pattern_y: u16,
                             x: u16,
                             y: u16,
-                            attribute: &Attribute
+                            attribute: &Attribute,
+                            is_sprite: bool
                             ) {
         let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
         let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
@@ -381,10 +385,19 @@ impl Ppu {
         let color_index = pattern.color_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
 
+        if is_sprite && color_index == 0 {
+            return;
+        }
+
         info!("pattern:addr:0x{:04x}, pattern_index:{:02x}", pattern_addr, pattern_index);
 
         let tile_color = attribute.table_color(pattern_x, pattern_y) | color_index;
-        let palette_index = self.vram.read_internal(PALETTE_BASE_ADDR + tile_color as u16) & 0x3f;
+        let palette_addr = if is_sprite {
+                                PALETTE_SPRITE_ADDR + tile_color as u16
+                           } else {
+                                PALETTE_BASE_ADDR + tile_color as u16
+                           };
+        let palette_index = self.vram.read_internal(palette_addr) & 0x3f;
         self.put_pixel(palette_index, x, y);
     }
 
