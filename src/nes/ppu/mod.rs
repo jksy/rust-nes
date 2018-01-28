@@ -179,11 +179,11 @@ impl Ppu {
         }
     }
 
-    #[inline]
     pub fn cycle(&self) -> u64 {
         self.cycle
     }
 
+    #[inline(never)]
     pub fn tick(&mut self) {
         self.cycle = self.cycle.wrapping_add(1);
         info!("ppu cycle:{:}", self.cycle);
@@ -226,6 +226,7 @@ impl Ppu {
 
     }
 
+    #[inline(never)]
     fn process_cycle(&mut self) {
         info!("ppu ({:x}({}),{:x}({}))",
                  self.current_cycle,
@@ -313,6 +314,7 @@ impl Ppu {
         attr
     }
 
+    #[inline(never)]
     fn process_pixel(&mut self) {
         let x = self.current_cycle + self.scroll_position[0] as u16;
         let y = self.current_line + self.scroll_position[1] as u16;
@@ -358,7 +360,7 @@ impl Ppu {
             // TODO:replace optimal palette addr
             self.render_pattern_pixel(sprite_pattern_base,
                                       pattern_index,
-                                      x - sprite_x - 1, y - sprite_y,
+                                      x - sprite_x, y - sprite_y,
                                       x, y,
                                       &attr,
                                       true);
@@ -368,11 +370,12 @@ impl Ppu {
         }
     }
 
+    #[inline(never)]
     fn render_pattern_pixel(&mut self,
                             pattern_base: u16,
                             pattern_index: u8,
-                            pattern_x: u16,
-                            pattern_y: u16,
+                            mut pattern_x: u16,
+                            mut pattern_y: u16,
                             x: u16,
                             y: u16,
                             attribute: &Attribute,
@@ -381,6 +384,13 @@ impl Ppu {
         let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
         let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
         let pattern = Pattern::new(&memory);
+
+        if is_sprite && attribute.is_frip_horizontally() {
+            pattern_x = pattern.width() - (pattern_x & 0x07);
+        }
+        if is_sprite && attribute.is_frip_vertically() {
+            pattern_y = pattern.height() - (pattern_y & 0x07);
+        }
 
         let color_index = pattern.color_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
@@ -523,6 +533,16 @@ impl<'a> Pattern<'a> {
         let high = self.high[y as usize] << x & 0x80;
         low >> 7 | high >> 6
     }
+
+    pub fn width(&self) -> u16 {
+        // TODO: 8x16 sprite
+        8
+    }
+
+    pub fn height(&self) -> u16 {
+        // TODO: 8x16 sprite
+        8
+    }
 }
 
 #[derive(Debug)]
@@ -544,6 +564,14 @@ impl Attribute {
             (false, false) => (self.attribute >> 6) & 0x03,
         };
         attr_table_color << 2
+    }
+
+    pub fn is_frip_horizontally(&self) -> bool {
+        (self.attribute & 0x40) != 0
+    }
+
+    pub fn is_frip_vertically(&self) -> bool {
+        (self.attribute & 0x80) != 0
     }
 }
 
