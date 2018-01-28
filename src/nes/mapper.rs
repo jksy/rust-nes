@@ -6,7 +6,7 @@ pub struct Mapper {
 
 impl Mapper {
     pub fn new() -> Self {
-        Mapper{rom: Rom::empty()}
+        Mapper { rom: Rom::empty() }
     }
 
     pub fn set_rom(&mut self, rom: Box<Rom>) {
@@ -29,4 +29,3 @@ impl Mapper {
         self.rom.initial_pc()
     }
 }
-

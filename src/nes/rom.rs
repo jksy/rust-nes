@@ -3,7 +3,7 @@ extern crate bytes;
 use std;
 use std::fs::File;
 use std::io::prelude::*;
-use self::bytes::{BytesMut, Bytes, BufMut};
+use self::bytes::{BufMut, Bytes, BytesMut};
 use std::mem;
 use std::slice;
 
@@ -15,7 +15,7 @@ struct RomHeader {
     flags6: u8,
     flags7: u8,
     flags: [u8; 2],
-    zero: [u8; 6]
+    zero: [u8; 6],
 }
 
 impl RomHeader {
@@ -23,7 +23,7 @@ impl RomHeader {
         self.magic_number[0] == 0x4e && // 'N'
         self.magic_number[1] == 0x45 && // 'E'
         self.magic_number[2] == 0x53 && // 'S'
-        self.magic_number[3] == 0x1a    // EOF(DOS)
+        self.magic_number[3] == 0x1a // EOF(DOS)
     }
 
     fn mapper_no(&self) -> u16 {
@@ -62,7 +62,11 @@ impl Rom {
         let mut chr = BytesMut::with_capacity(CHR_BLOCK_SIZE * header.chr_page_count as usize);
         Rom::read_file(&mut file, &mut chr, 8 * header.chr_page_count as usize)?;
 
-        let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
+        let rom = Rom {
+            header: header,
+            prg: prg.freeze(),
+            chr: chr.freeze(),
+        };
         Ok(Box::new(rom))
     }
 
@@ -70,20 +74,28 @@ impl Rom {
         let header: RomHeader = unsafe { mem::zeroed() };
         let prg = BytesMut::with_capacity(0);
         let chr = BytesMut::with_capacity(0);
-        let rom = Rom{header: header, prg: prg.freeze(), chr: chr.freeze()};
+        let rom = Rom {
+            header: header,
+            prg: prg.freeze(),
+            chr: chr.freeze(),
+        };
         Box::new(rom)
     }
 
     pub fn print(&self) {
         let magic_number = self.header.magic_number;
         info!("=======ROM Information=======");
-        info!("magic_number:[{}{}{}{}]",
-                 magic_number[0] as char,
-                 magic_number[1] as char,
-                 magic_number[2] as char,
-                 magic_number[3] as char,
-                );
-        info!("validate_magic_number:{}", self.header.validate_magic_number());
+        info!(
+            "magic_number:[{}{}{}{}]",
+            magic_number[0] as char,
+            magic_number[1] as char,
+            magic_number[2] as char,
+            magic_number[3] as char,
+        );
+        info!(
+            "validate_magic_number:{}",
+            self.header.validate_magic_number()
+        );
         info!("prg_page_count:{}", self.header.prg_page_count);
         info!("chr_page_count:{}", self.header.chr_page_count);
         info!("mapper_no:{}", self.header.mapper_no());
@@ -112,7 +124,7 @@ impl Rom {
         let header = &self.header;
         if header.prg_page_count == 2 {
             let head = &self.prg[0..PRG_BLOCK_SIZE];
-            let tail = &self.prg[PRG_BLOCK_SIZE..(PRG_BLOCK_SIZE*2)];
+            let tail = &self.prg[PRG_BLOCK_SIZE..(PRG_BLOCK_SIZE * 2)];
             if header.mapper_no() == 0 && head == tail {
                 pc = 0xc000
             }
@@ -142,7 +154,11 @@ impl Rom {
         Ok(header)
     }
 
-    fn read_file(file: &mut File, bytes: &mut BytesMut, read_kbyte: usize) -> Result<(), std::io::Error> {
+    fn read_file(
+        file: &mut File,
+        bytes: &mut BytesMut,
+        read_kbyte: usize,
+    ) -> Result<(), std::io::Error> {
         let mut buf = [0 as u8; 1024];
         for _ in 0..read_kbyte {
             file.read_exact(&mut buf)?;
@@ -151,4 +167,3 @@ impl Rom {
         Ok(())
     }
 }
-

@@ -15,26 +15,26 @@ use self::vram::Vram;
 
 pub struct Ppu {
     // PPU register
-    control: u8,     // $2000(w)
-    mask: u8,        // $2001(w)
-    status: u8,      // $2002(r)
-    oam_address: u8, // $2003(w)
+    control: u8,              // $2000(w)
+    mask: u8,                 // $2001(w)
+    status: u8,               // $2002(r)
+    oam_address: u8,          // $2003(w)
     scroll_position: Vec<u8>, //  $2005(w*2)
-    vram: Vram,      // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
-                     // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
-                     // 0x2000-0x23FF:Name table1
-                     // 0x2400-0x27FF:Name table2
-                     // 0x2800-0x2BFF:Name table3
-                     // 0x2C00-0x2FFF:Name table4
-                     // 0x3F00-0x3F1F:Pallete
-                     //
+    vram: Vram,               // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
+    // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
+    // 0x2000-0x23FF:Name table1
+    // 0x2400-0x27FF:Name table2
+    // 0x2800-0x2BFF:Name table3
+    // 0x2C00-0x2FFF:Name table4
+    // 0x3F00-0x3F1F:Pallete
+    //
     oam_ram: Vec<u8>, // for sprites
     mbc: Weak<RefCell<Box<Mbc>>>,
     mapper: Rc<RefCell<Box<Mapper>>>,
     cycle: u64,
     current_line: u16,
     current_cycle: u16,
-    is_raise_nmi:    bool, // true:when raise interruput
+    is_raise_nmi: bool, // true:when raise interruput
     is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
 
@@ -43,7 +43,7 @@ pub struct Ppu {
     tasks: Vec<Box<OamDmaTask>>,
 }
 
-const PALETTE_COLORS: [[u8;3]; 64] = [
+const PALETTE_COLORS: [[u8; 3]; 64] = [
     [0x7Cu8, 0x7Cu8, 0x7Cu8],
     [0x00u8, 0x00u8, 0xFCu8],
     [0x00u8, 0x00u8, 0xBCu8],
@@ -110,58 +110,76 @@ const PALETTE_COLORS: [[u8;3]; 64] = [
     [0x00u8, 0x00u8, 0x00u8],
 ];
 
-const PALETTE_BASE_ADDR :u16 = 0x3F00;
-const PALETTE_SPRITE_ADDR :u16 = 0x3F10;
+const PALETTE_BASE_ADDR: u16 = 0x3F00;
+const PALETTE_SPRITE_ADDR: u16 = 0x3F10;
 
-#[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
-#[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
-#[allow(dead_code)] const CONTROL_MASK_SPRITE_SIZE_16  :u8 = 0x20;  // 0:8x8, 1:8x16
-#[allow(dead_code)] const CONTROL_MASK_BG_ADDRESS      :u8 = 0x10;  // 0:$0000, 1:$1000
-#[allow(dead_code)] const CONTROL_MASK_SPRITE_ADDRESS  :u8 = 0x08;  // 0:$0000, 1:$1000
-#[allow(dead_code)] const CONTROL_MASK_ADDR_INCREMENT  :u8 = 0x04;  // 0: +=1 1: +=32
-#[allow(dead_code)] const CONTROL_MASK_NAME_TABLE_ADDR :u8 = 0x03;  // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
+#[allow(dead_code)]
+const CONTROL_MASK_ENABLE_NMI: u8 = 0x80; // VBlank時にNMIを発生
+#[allow(dead_code)]
+const CONTROL_MASK_MASTER_SLAVE: u8 = 0x40; // always true
+#[allow(dead_code)]
+const CONTROL_MASK_SPRITE_SIZE_16: u8 = 0x20; // 0:8x8, 1:8x16
+#[allow(dead_code)]
+const CONTROL_MASK_BG_ADDRESS: u8 = 0x10; // 0:$0000, 1:$1000
+#[allow(dead_code)]
+const CONTROL_MASK_SPRITE_ADDRESS: u8 = 0x08; // 0:$0000, 1:$1000
+#[allow(dead_code)]
+const CONTROL_MASK_ADDR_INCREMENT: u8 = 0x04; // 0: +=1 1: +=32
+#[allow(dead_code)]
+const CONTROL_MASK_NAME_TABLE_ADDR: u8 = 0x03; // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
 
-#[allow(dead_code)] const SCANLINE: i32 = 261;
-#[allow(dead_code)] const CYCLE_PER_LINE: i32 = 341;
+#[allow(dead_code)]
+const SCANLINE: i32 = 261;
+#[allow(dead_code)]
+const CYCLE_PER_LINE: i32 = 341;
 
-#[allow(dead_code)] const STATUS_OVERFLOW : u8 = 0x20u8; // sprite over flow
-#[allow(dead_code)] const STATUS_SPRITE   : u8 = 0x40u8; // sprite zero hit
-#[allow(dead_code)] const STATUS_VBLANK   : u8 = 0x80u8;
+#[allow(dead_code)]
+const STATUS_OVERFLOW: u8 = 0x20u8; // sprite over flow
+#[allow(dead_code)]
+const STATUS_SPRITE: u8 = 0x40u8; // sprite zero hit
+#[allow(dead_code)]
+const STATUS_VBLANK: u8 = 0x80u8;
 
-#[allow(dead_code)] const MASK_GRAY                     :u8 = 0x01u8;
-#[allow(dead_code)] const MASK_SHOW_BACKGROUND_LEFTMOST :u8 = 0x02u8;
-#[allow(dead_code)] const MASK_SHOW_SPRITE_LEFTMOST     :u8 = 0x04u8;
-#[allow(dead_code)] const MASK_SHOW_BACKGROUND          :u8 = 0x08u8;
-#[allow(dead_code)] const MASK_SHOW_SPRITE              :u8 = 0x10u8;
-#[allow(dead_code)] const MASK_EMP_RED                  :u8 = 0x20u8;
-#[allow(dead_code)] const MASK_EMP_GREEN                :u8 = 0x40u8;
-#[allow(dead_code)] const MASK_EMP_BLUE                 :u8 = 0x80u8;
+#[allow(dead_code)]
+const MASK_GRAY: u8 = 0x01u8;
+#[allow(dead_code)]
+const MASK_SHOW_BACKGROUND_LEFTMOST: u8 = 0x02u8;
+#[allow(dead_code)]
+const MASK_SHOW_SPRITE_LEFTMOST: u8 = 0x04u8;
+#[allow(dead_code)]
+const MASK_SHOW_BACKGROUND: u8 = 0x08u8;
+#[allow(dead_code)]
+const MASK_SHOW_SPRITE: u8 = 0x10u8;
+#[allow(dead_code)]
+const MASK_EMP_RED: u8 = 0x20u8;
+#[allow(dead_code)]
+const MASK_EMP_GREEN: u8 = 0x40u8;
+#[allow(dead_code)]
+const MASK_EMP_BLUE: u8 = 0x80u8;
 
 impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
-        let horizontal = {
-            mapper.borrow().is_horizontal()
-        };
+        let horizontal = { mapper.borrow().is_horizontal() };
 
-        Ppu{
-            control:       0u8,
-            mask:          0u8,
-            status:        0u8,
-            oam_address:   0u8,
-            vram:          Vram::new(horizontal),
-            oam_ram:       vec![0x00u8; 0x0100],
-            cycle:         0u64,
-            current_line:  0,
+        Ppu {
+            control: 0u8,
+            mask: 0u8,
+            status: 0u8,
+            oam_address: 0u8,
+            vram: Vram::new(horizontal),
+            oam_ram: vec![0x00u8; 0x0100],
+            cycle: 0u64,
+            current_line: 0,
             current_cycle: 0,
-            scroll_position:    vec![0,0],
-            is_raise_nmi:       false,
+            scroll_position: vec![0, 0],
+            is_raise_nmi: false,
             is_display_changed: false,
-            is_horizontal:      horizontal,
+            is_horizontal: horizontal,
 
-            raw_bmp:  Image::new(512, 480),
-            mbc:      Weak::default(),
-            mapper:   mapper,
-            tasks   : vec![],
+            raw_bmp: Image::new(512, 480),
+            mbc: Weak::default(),
+            mapper: mapper,
+            tasks: vec![],
         }
     }
 
@@ -228,11 +246,10 @@ impl Ppu {
 
     #[inline(never)]
     fn process_cycle(&mut self) {
-        info!("ppu ({:x}({}),{:x}({}))",
-                 self.current_cycle,
-                 self.current_cycle,
-                 self.current_line,
-                 self.current_line);
+        info!(
+            "ppu ({:x}({}),{:x}({}))",
+            self.current_cycle, self.current_cycle, self.current_line, self.current_line
+        );
 
         if self.current_cycle == 1 {
             if self.current_line == 241 {
@@ -293,7 +310,7 @@ impl Ppu {
             1 => 0x2400u16,
             2 => 0x2800u16,
             3 => 0x2C00u16,
-            _ => {unreachable!()}
+            _ => unreachable!(),
         }
     }
 
@@ -326,24 +343,28 @@ impl Ppu {
         let pattern_index = self.vram.read_internal(nametable_addr);
         let bg_pattern_addr = self.bg_pattern_addr();
 
-        info!("nametable_addr:{:04x}, attr:{:?}, pat_index:{:04x}",
-              nametable_addr,
-              attribute,
-              pattern_index);
+        info!(
+            "nametable_addr:{:04x}, attr:{:?}, pat_index:{:04x}",
+            nametable_addr, attribute, pattern_index
+        );
 
-        self.render_pattern_pixel(bg_pattern_addr,
-                                  pattern_index,
-                                  x, y,
-                                  x, y,
-                                  &attribute,
-                                  false);
+        self.render_pattern_pixel(
+            bg_pattern_addr,
+            pattern_index,
+            x,
+            y,
+            x,
+            y,
+            &attribute,
+            false,
+        );
 
         // render sprite
         let sprite_pattern_base = self.sprite_pattern_addr();
         self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
-            let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
-            let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
+            let sprite_y = self.oam_ram[sprite_index * 4] as u16;
+            let sprite_x = self.oam_ram[sprite_index * 4 + 3] as u16;
             if y < sprite_y || sprite_y + 8 < y {
                 continue;
             }
@@ -355,15 +376,19 @@ impl Ppu {
             }
 
             let pattern_index = self.oam_ram[sprite_index * 4 + 1];
-            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
+            let attr = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
 
             // TODO:replace optimal palette addr
-            self.render_pattern_pixel(sprite_pattern_base,
-                                      pattern_index,
-                                      x - sprite_x, y - sprite_y,
-                                      x, y,
-                                      &attr,
-                                      true);
+            self.render_pattern_pixel(
+                sprite_pattern_base,
+                pattern_index,
+                x - sprite_x,
+                y - sprite_y,
+                x,
+                y,
+                &attr,
+                true,
+            );
             if sprite_index == 0 {
                 self.status |= STATUS_SPRITE; // set sprite zero hit
             }
@@ -371,18 +396,19 @@ impl Ppu {
     }
 
     #[inline(never)]
-    fn render_pattern_pixel(&mut self,
-                            pattern_base: u16,
-                            pattern_index: u8,
-                            mut pattern_x: u16,
-                            mut pattern_y: u16,
-                            x: u16,
-                            y: u16,
-                            attribute: &Attribute,
-                            is_sprite: bool
-                            ) {
+    fn render_pattern_pixel(
+        &mut self,
+        pattern_base: u16,
+        pattern_index: u8,
+        mut pattern_x: u16,
+        mut pattern_y: u16,
+        x: u16,
+        y: u16,
+        attribute: &Attribute,
+        is_sprite: bool,
+    ) {
         let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
-        let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
+        let memory = self.read_vram_range(pattern_addr, pattern_addr + 16);
         let pattern = Pattern::new(&memory);
 
         if is_sprite && attribute.is_frip_horizontally() {
@@ -392,21 +418,23 @@ impl Ppu {
             pattern_y = pattern.height() - (pattern_y & 0x07);
         }
 
-        let color_index = pattern.color_index((pattern_x & 0x07) as u8,
-                                      (pattern_y & 0x07) as u8);
+        let color_index = pattern.color_index((pattern_x & 0x07) as u8, (pattern_y & 0x07) as u8);
 
         if is_sprite && color_index == 0 {
             return;
         }
 
-        info!("pattern:addr:0x{:04x}, pattern_index:{:02x}", pattern_addr, pattern_index);
+        info!(
+            "pattern:addr:0x{:04x}, pattern_index:{:02x}",
+            pattern_addr, pattern_index
+        );
 
         let tile_color = attribute.table_color(pattern_x, pattern_y) | color_index;
         let palette_addr = if is_sprite {
-                                PALETTE_SPRITE_ADDR + tile_color as u16
-                           } else {
-                                PALETTE_BASE_ADDR + tile_color as u16
-                           };
+            PALETTE_SPRITE_ADDR + tile_color as u16
+        } else {
+            PALETTE_BASE_ADDR + tile_color as u16
+        };
         let palette_index = self.vram.read_internal(palette_addr) & 0x3f;
         self.put_pixel(palette_index, x, y);
     }
@@ -415,11 +443,8 @@ impl Ppu {
     fn put_pixel(&mut self, palette_index: u8, x: u16, y: u16) {
         let color = PALETTE_COLORS[palette_index as usize];
         let pixel = Pixel::new(color[0], color[1], color[2]);
-        self.raw_bmp.set_pixel(x as u32,
-                               y as u32,
-                               pixel);
+        self.raw_bmp.set_pixel(x as u32, y as u32, pixel);
     }
-
 
     fn nametable_increment_value(&self) -> u16 {
         match self.control & CONTROL_MASK_ADDR_INCREMENT {
@@ -431,70 +456,79 @@ impl Ppu {
     pub fn read(&mut self, addr: u16) -> u8 {
         info!("PPU read:{:04x}", addr);
         match addr {
-            0x2002 => { // PPU_STATUS
+            0x2002 => {
+                // PPU_STATUS
                 self.status
-            },
-            0x2004 => { // OAM_DATA
+            }
+            0x2004 => {
+                // OAM_DATA
                 self.oam_ram[self.oam_address as usize]
-            },
-            0x2007 => { // PPU_DATA
+            }
+            0x2007 => {
+                // PPU_DATA
                 let address = self.vram.get_addr();
                 let result = self.vram.read(address);
                 let inc = self.nametable_increment_value();
                 self.vram.increment_addr(inc);
                 result
-            },
-            _ => panic!("PPU read error:#{:x}", addr)
+            }
+            _ => panic!("PPU read error:#{:x}", addr),
         }
     }
 
     pub fn write(&mut self, addr: u16, data: u8) {
         match addr {
-            0x2000 => { // PPU_CTRL
+            0x2000 => {
+                // PPU_CTRL
                 self.control = data;
                 self.is_display_changed = true
-            },
-            0x2001 => { // PPU_MASK
+            }
+            0x2001 => {
+                // PPU_MASK
                 self.mask = data;
                 self.is_display_changed = true
-            },
-            0x2003 => { // OAM_ADDRESS
+            }
+            0x2003 => {
+                // OAM_ADDRESS
                 self.oam_address = data;
                 info!("PPU OAM write addr : 0x{:02x}", data);
-            },
-            0x2004 => { // OAM_DATA
-                info!("PPU write oam_ram[{:02x}] = {:02x}",
-                      self.oam_address,
-                      data);
+            }
+            0x2004 => {
+                // OAM_DATA
+                info!("PPU write oam_ram[{:02x}] = {:02x}", self.oam_address, data);
                 self.oam_ram[self.oam_address as usize] = data;
                 self.oam_address = self.oam_address.wrapping_add(1);
-            },
-            0x2005 => { // PPU_SCROLL
+            }
+            0x2005 => {
+                // PPU_SCROLL
                 self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
-                info!("PPU scroll position:{:x},{:x}",
-                         self.scroll_position[0],
-                         self.scroll_position[1],
-                         );
+                info!(
+                    "PPU scroll position:{:x},{:x}",
+                    self.scroll_position[0], self.scroll_position[1],
+                );
                 self.is_display_changed = true;
-            },
-            0x2006 => { // PPU_ADDRESS
+            }
+            0x2006 => {
+                // PPU_ADDRESS
                 self.vram.set_addr(data);
-            },
-            0x2007 => { // PPU_DATA
+            }
+            0x2007 => {
+                // PPU_DATA
                 let mut address = self.vram.get_addr();
                 self.vram.write(address, data);
                 let inc = self.nametable_increment_value();
                 self.vram.increment_addr(inc);
                 self.is_display_changed = true;
-            },
-            0x4014 => { // OAM_DMA
+            }
+            0x4014 => {
+                // OAM_DMA
                 let source = (data as u16) << 8;
                 let target = self.oam_address as u16;
                 // push task, because cant borrow mbc here
                 self.tasks.push(Box::new(OamDmaTask::new(source, target)));
-            },
-            _ => panic!("PPU write error:#{:x},#{:x}", addr, data)
+            }
+            _ => panic!("PPU write error:#{:x},#{:x}", addr, data),
         }
     }
 
@@ -519,13 +553,16 @@ impl Ppu {
 
 #[derive(Debug)]
 struct Pattern<'a> {
-    low:  &'a [u8],
+    low: &'a [u8],
     high: &'a [u8],
 }
 
 impl<'a> Pattern<'a> {
     fn new(data: &'a [u8]) -> Self {
-        Pattern{low: &data[0..8], high: &data[8..16]}
+        Pattern {
+            low: &data[0..8],
+            high: &data[8..16],
+        }
     }
 
     pub fn color_index(&self, x: u8, y: u8) -> u8 {
@@ -552,15 +589,15 @@ struct Attribute {
 
 impl Attribute {
     fn new(attr: u8) -> Self {
-        Attribute{attribute: attr}
+        Attribute { attribute: attr }
     }
 
     #[inline(always)]
     pub fn table_color(&self, pattern_x: u16, pattern_y: u16) -> u8 {
         let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
-            (true,  true)  => self.attribute & 0x03,
-            (false, true)  => (self.attribute >> 2) & 0x03,
-            (true,  false) => (self.attribute >> 4) & 0x03,
+            (true, true) => self.attribute & 0x03,
+            (false, true) => (self.attribute >> 2) & 0x03,
+            (true, false) => (self.attribute >> 4) & 0x03,
             (false, false) => (self.attribute >> 6) & 0x03,
         };
         attr_table_color << 2
@@ -583,18 +620,20 @@ struct OamDmaTask {
 
 impl OamDmaTask {
     fn new(source: u16, target: u16) -> Self {
-        OamDmaTask{
+        OamDmaTask {
             source: source,
             target: target,
         }
     }
 
     fn call(&self, ppu: &mut Ppu) {
-        info!("PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
-              self.target,
-              self.target + 0x0100u16,
-              self.source,
-              self.source + 0x0100u16);
+        info!(
+            "PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
+            self.target,
+            self.target + 0x0100u16,
+            self.source,
+            self.source + 0x0100u16
+        );
         // TODO:bulk copy
         for i in 0..0x0100u16 {
             let s = (self.source + i) as u16;
@@ -602,12 +641,11 @@ impl OamDmaTask {
             let mbc = ppu.mbc.upgrade().unwrap();
             let v = mbc.borrow().read(s);
             ppu.oam_ram[t] = v;
-            info!("oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
-            t,
-            s,
-            v);
+            info!(
+                "oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
+                t, s, v
+            );
         }
         ppu.is_display_changed = true;
     }
 }
-
