@@ -111,6 +111,7 @@ const PALETTE_COLORS: [[u8;3]; 64] = [
 ];
 
 const PALETTE_BASE_ADDR :u16 = 0x3F00;
+const PALETTE_SPRITE_ADDR :u16 = 0x3F10;
 
 #[allow(dead_code)] const CONTROL_MASK_ENABLE_NMI      :u8 = 0x80;  // VBlank時にNMIを発生
 #[allow(dead_code)] const CONTROL_MASK_MASTER_SLAVE    :u8 = 0x40;  // always true
@@ -178,11 +179,11 @@ impl Ppu {
         }
     }
 
-    #[inline]
     pub fn cycle(&self) -> u64 {
         self.cycle
     }
 
+    #[inline(never)]
     pub fn tick(&mut self) {
         self.cycle = self.cycle.wrapping_add(1);
         info!("ppu cycle:{:}", self.cycle);
@@ -203,10 +204,13 @@ impl Ppu {
 
     // TODO:no copy
     fn read_vram_range(&mut self, start: u16, end: u16) -> Vec<u8> {
-        let mut v = vec![];
-        for i in start..end {
-            v.push(self.vram.read_internal(i));
+        let size = (end - start) as usize;
+        let mut v = Vec::with_capacity(size);
+        unsafe {
+            v.set_len(size);
         }
+        info!("v:{:?}, v.len:{:?}", v, v.len());
+        self.vram.read_internal_range(start..end, &mut v);
         v
     }
 
@@ -222,6 +226,7 @@ impl Ppu {
 
     }
 
+    #[inline(never)]
     fn process_cycle(&mut self) {
         info!("ppu ({:x}({}),{:x}({}))",
                  self.current_cycle,
@@ -309,6 +314,7 @@ impl Ppu {
         attr
     }
 
+    #[inline(never)]
     fn process_pixel(&mut self) {
         let x = self.current_cycle + self.scroll_position[0] as u16;
         let y = self.current_line + self.scroll_position[1] as u16;
@@ -329,15 +335,14 @@ impl Ppu {
                                   pattern_index,
                                   x, y,
                                   x, y,
-                                  &attribute);
+                                  &attribute,
+                                  false);
 
         // render sprite
         let sprite_pattern_base = self.sprite_pattern_addr();
         self.status &= !STATUS_SPRITE; // clear sprite zero hit
         for sprite_index in 0..64 {
             let sprite_y      = self.oam_ram[sprite_index * 4] as u16;
-            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
-            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
             let sprite_x      = self.oam_ram[sprite_index * 4 + 3] as u16;
             if y < sprite_y || sprite_y + 8 < y {
                 continue;
@@ -349,38 +354,60 @@ impl Ppu {
                 continue;
             }
 
+            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
+            let attr          = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
+
             // TODO:replace optimal palette addr
             self.render_pattern_pixel(sprite_pattern_base,
                                       pattern_index,
-                                      x - sprite_x - 1, y - sprite_y,
+                                      x - sprite_x, y - sprite_y,
                                       x, y,
-                                      &attr);
+                                      &attr,
+                                      true);
             if sprite_index == 0 {
                 self.status |= STATUS_SPRITE; // set sprite zero hit
             }
         }
     }
 
+    #[inline(never)]
     fn render_pattern_pixel(&mut self,
                             pattern_base: u16,
                             pattern_index: u8,
-                            pattern_x: u16,
-                            pattern_y: u16,
+                            mut pattern_x: u16,
+                            mut pattern_y: u16,
                             x: u16,
                             y: u16,
-                            attribute: &Attribute
+                            attribute: &Attribute,
+                            is_sprite: bool
                             ) {
         let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
         let memory = self.read_vram_range(pattern_addr, pattern_addr+16);
         let pattern = Pattern::new(&memory);
 
+        if is_sprite && attribute.is_frip_horizontally() {
+            pattern_x = pattern.width() - (pattern_x & 0x07);
+        }
+        if is_sprite && attribute.is_frip_vertically() {
+            pattern_y = pattern.height() - (pattern_y & 0x07);
+        }
+
         let color_index = pattern.color_index((pattern_x & 0x07) as u8,
                                       (pattern_y & 0x07) as u8);
+
+        if is_sprite && color_index == 0 {
+            return;
+        }
 
         info!("pattern:addr:0x{:04x}, pattern_index:{:02x}", pattern_addr, pattern_index);
 
         let tile_color = attribute.table_color(pattern_x, pattern_y) | color_index;
-        let palette_index = self.vram.read_internal(PALETTE_BASE_ADDR + tile_color as u16) & 0x3f;
+        let palette_addr = if is_sprite {
+                                PALETTE_SPRITE_ADDR + tile_color as u16
+                           } else {
+                                PALETTE_BASE_ADDR + tile_color as u16
+                           };
+        let palette_index = self.vram.read_internal(palette_addr) & 0x3f;
         self.put_pixel(palette_index, x, y);
     }
 
@@ -506,6 +533,16 @@ impl<'a> Pattern<'a> {
         let high = self.high[y as usize] << x & 0x80;
         low >> 7 | high >> 6
     }
+
+    pub fn width(&self) -> u16 {
+        // TODO: 8x16 sprite
+        8
+    }
+
+    pub fn height(&self) -> u16 {
+        // TODO: 8x16 sprite
+        8
+    }
 }
 
 #[derive(Debug)]
@@ -527,6 +564,14 @@ impl Attribute {
             (false, false) => (self.attribute >> 6) & 0x03,
         };
         attr_table_color << 2
+    }
+
+    pub fn is_frip_horizontally(&self) -> bool {
+        (self.attribute & 0x40) != 0
+    }
+
+    pub fn is_frip_vertically(&self) -> bool {
+        (self.attribute & 0x80) != 0
     }
 }
 

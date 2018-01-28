@@ -59,6 +59,7 @@ impl Nes {
         self.ppu.borrow_mut().dump();
     }
 
+    #[inline(never)]
     pub fn tick(&mut self) {
         let cpu_cycle = self.cpu.cycle();
         let ppu_cycle = {

@@ -744,11 +744,11 @@ impl Cpu {
         MemoryAddressingMode::new(addr, 2)
     }
 
-    #[inline]
     pub fn cycle(&self) -> u64 {
         self.cycle
     }
 
+    #[inline(never)]
     pub fn tick(&mut self) {
         self.debug();
 

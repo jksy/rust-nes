@@ -1,5 +1,8 @@
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::ops::Range;
+use std::slice;
+use std::vec::Vec;
 
 const INITIAL_PALETTE_TABLE: [u8; 32] = [
     0x09,0x01,0x00,0x01,0x00,0x02,0x02,0x0D,
@@ -39,6 +42,10 @@ impl NameTable {
         self.ram[addr as usize]
     }
 
+    fn read_range(&self, range: Range<usize>, vec: &mut Vec<u8>) {
+        vec.copy_from_slice(&self.ram[range]);
+    }
+
     fn write(&mut self, addr: u16, data: u8) {
         info!("Vram::write {:04x},{:02x}", addr, data);
         self.ram[addr as usize] = data
@@ -54,8 +61,9 @@ impl PatternTable {
         self.ram[addr as usize]
     }
 
-    // fn copy_from(data: Vec<u8>) {
-    // }
+    fn read_range(&self, range: Range<usize>, vec: &mut Vec<u8>) {
+        vec.copy_from_slice(&self.ram[range]);
+    }
 
     fn write(&mut self, addr: u16, data: u8) {
         self.ram[addr as usize] = data
@@ -70,6 +78,10 @@ impl PaletteTable {
     fn read(&self, addr: u16) -> u8 {
         let addr = PaletteTable::normalize_addr(addr);
         self.ram[addr as usize]
+    }
+
+    fn read_range(&self, range: Range<usize>, vec: &mut Vec<u8>) {
+        vec.copy_from_slice(&self.ram[range]);
     }
 
     fn write(&mut self, addr: u16, data: u8) {
@@ -160,7 +172,6 @@ impl Vram {
             },
             0x2000...0x3EFF => {
                 let (index, target_addr) = Vram::calclate_nametable_addr(addr);
-                info!("nametable[{:x}][{:x}]", index, target_addr);
                 self.name_tables[index].borrow().read(target_addr)
             },
             0x3F00...0x3FFF => {
@@ -171,9 +182,33 @@ impl Vram {
                 panic!("cant read PPU:0x{:04x}", addr);
             }
         };
-        // info!("result:{:x}", result);
-
         result
+    }
+
+    // copy memory from vram
+    // dont check the memory type. (PaletteTable, PatternTable, NameTable)
+    pub fn read_internal_range(&mut self, range: Range<u16>, vec: &mut Vec<u8>) {
+        match range.start {
+            0x0000...0x1FFF => {
+                let (index, target_addr) = Vram::calclate_patterntable_addr(range.start);
+                let target_addr = target_addr as usize;
+                self.pattern_tables[index].read_range(target_addr..(target_addr+range.count()), vec);
+            },
+            0x2000...0x3EFF => {
+                let (index, target_addr) = Vram::calclate_nametable_addr(range.start);
+                let target_addr = target_addr as usize;
+                self.name_tables[index].borrow().read_range(target_addr..(target_addr+range.count()), vec);
+            },
+            0x3F00...0x3FFF => {
+                let (index, target_addr) = Vram::calclate_palettetable_addr(range.start);
+                let target_addr = target_addr as usize;
+                // self.palette_tables[index].ram[target_addr..(target_addr+range.count())]
+                self.palette_tables[index].borrow().read_range(target_addr..(target_addr+range.count()), vec);
+            },
+            _ => {
+                panic!("cant read PPU:0x{:04x}", range.start);
+            }
+        };
     }
 
     pub fn read(&mut self, addr: u16) -> u8 {
