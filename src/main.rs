@@ -1,10 +1,10 @@
 mod nes;
 
-extern crate sdl2;
 extern crate bmp;
+extern crate env_logger;
 #[macro_use]
 extern crate log;
-extern crate env_logger;
+extern crate sdl2;
 
 use bmp::Image;
 use nes::Nes;
@@ -39,23 +39,24 @@ fn run_nes() -> Result<(), (String)> {
         return Err("need only one argument".to_owned());
     }
     let rom_filename = get_rom_filename().unwrap();
-    // let rom_filename = "./roms/smb.nes";
 
     let sdl_context = sdl2::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
 
-    let window = video_subsystem.window("rust-nes", 341, 261)
-                                .position_centered()
-                                .build()
-                                .unwrap();
+    let window = video_subsystem
+        .window("rust-nes", 341, 261)
+        .position_centered()
+        .build()
+        .unwrap();
 
-    let mut canvas = window.into_canvas()
-                            .target_texture()
-                            .present_vsync()
-                            .build()
-                            .unwrap();
+    let mut canvas = window
+        .into_canvas()
+        .target_texture()
+        .present_vsync()
+        .build()
+        .unwrap();
 
     let creator = canvas.texture_creator();
 
@@ -68,8 +69,9 @@ fn run_nes() -> Result<(), (String)> {
     nes.set_rom(rom.clone());
     nes.reset();
 
-    let mut texture = creator.
-        create_texture_streaming(PixelFormatEnum::RGB888, 256, 240).unwrap();
+    let mut texture = creator
+        .create_texture_streaming(PixelFormatEnum::RGB888, 256, 240)
+        .unwrap();
 
     let mut slow = false;
     let mut prev_render_time = SystemTime::now();
@@ -80,17 +82,22 @@ fn run_nes() -> Result<(), (String)> {
     'running: loop {
         for event in events.poll_iter() {
             match event {
-                Event::Quit {..} |
-                Event::KeyDown { keycode: Some(Keycode::Escape), ..} => {
+                Event::Quit { .. }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Escape),
+                    ..
+                } => {
                     break 'running;
-                },
-                Event::KeyDown { keycode: Some(Keycode::S), ..} => {
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => {
                     slow = !slow;
-                },
-                Event::KeyDown {..} |
-                Event::KeyUp {..} => {
+                }
+                Event::KeyDown { .. } | Event::KeyUp { .. } => {
                     button_state_changed = true;
-                },
+                }
                 _ => {}
             }
             info!("event:{:?}", event);
@@ -127,51 +134,60 @@ fn run_nes() -> Result<(), (String)> {
         prev_render_time = SystemTime::now();
         // dumping ram & ppu
         // nes.dump();
-    };
+    }
     Ok(())
 }
 
 fn get_button_state(events: &sdl2::EventPump) -> u8 {
-  let keys:HashSet<Keycode> = events.
-      keyboard_state().
-      pressed_scancodes().
-      filter_map(Keycode::from_scancode).
-      collect();
+    let keys: HashSet<Keycode> = events
+        .keyboard_state()
+        .pressed_scancodes()
+        .filter_map(Keycode::from_scancode)
+        .collect();
 
-  let mut button_state = 0x0u8;
-  {
-    for key in keys {
-        match key {
-            Keycode::Up     => {button_state |= joypad::BUTTON_UP},
-            Keycode::Down   => {button_state |= joypad::BUTTON_DOWN},
-            Keycode::Left   => {button_state |= joypad::BUTTON_LEFT},
-            Keycode::Right  => {button_state |= joypad::BUTTON_RIGHT},
-            Keycode::Space  => {button_state |= joypad::BUTTON_SELECT},
-            Keycode::Return => {button_state |= joypad::BUTTON_START},
-            Keycode::A      => {button_state |= joypad::BUTTON_A},
-            Keycode::B      => {button_state |= joypad::BUTTON_B},
-            _ => {},
-        }
-    }
-  }
-  return button_state;
-}
-
-fn render_nes_display(nes: &Nes, img: &mut Image, canvas: &mut Canvas<Window>, texture: &mut Texture) {
-    nes.render_image(img);
-
-    texture.with_lock(None, |buffer: &mut [u8], pitch: usize| {
-        for y in 0u32..240u32 {
-            for x in 0u32..256u32  {
-                let pixel = img.get_pixel(x, y);
-                let offset = (y * 256 * 4 + x * 4) as usize;
-                buffer[offset+1] = pixel.g;
-                buffer[offset+2] = pixel.r;
-                buffer[offset] = pixel.b;
+    let mut button_state = 0x0u8;
+    {
+        for key in keys {
+            match key {
+                Keycode::Up => button_state |= joypad::BUTTON_UP,
+                Keycode::Down => button_state |= joypad::BUTTON_DOWN,
+                Keycode::Left => button_state |= joypad::BUTTON_LEFT,
+                Keycode::Right => button_state |= joypad::BUTTON_RIGHT,
+                Keycode::Space => button_state |= joypad::BUTTON_SELECT,
+                Keycode::Return => button_state |= joypad::BUTTON_START,
+                Keycode::A => button_state |= joypad::BUTTON_A,
+                Keycode::B => button_state |= joypad::BUTTON_B,
+                _ => {}
             }
         }
-    }).unwrap();
-    canvas.copy(&texture, None, Some(Rect::new(0, 0, 255, 239))).unwrap();
+    }
+    return button_state;
+}
+
+fn render_nes_display(
+    nes: &Nes,
+    img: &mut Image,
+    canvas: &mut Canvas<Window>,
+    texture: &mut Texture,
+) {
+    nes.render_image(img);
+
+    texture
+        .with_lock(None, |buffer: &mut [u8], pitch: usize| {
+            for y in 0u32..240u32 {
+                for x in 0u32..256u32 {
+                    let pixel = img.get_pixel(x, y);
+                    let offset = (y * 256 * 4 + x * 4) as usize;
+                    buffer[offset + 1] = pixel.g;
+                    buffer[offset + 2] = pixel.r;
+                    buffer[offset] = pixel.b;
+                }
+            }
+        })
+        .unwrap();
+    canvas
+        .copy(&texture, None, Some(Rect::new(0, 0, 255, 239)))
+        .unwrap();
     canvas.present();
 }
 
@@ -184,4 +200,3 @@ fn main() {
         }
     });
 }
-
