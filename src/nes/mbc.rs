@@ -18,17 +18,20 @@ pub struct Mbc {
 }
 
 impl Mbc {
-    pub fn new(mapper: Rc<RefCell<Box<Mapper>>>,
-               ppu: Rc<RefCell<Box<Ppu>>>,
-               joypad: Rc<RefCell<Box<Joypad>>>,
-               ) -> Self {
-        Mbc{mapper: mapper,
+    pub fn new(
+        mapper: Rc<RefCell<Box<Mapper>>>,
+        ppu: Rc<RefCell<Box<Ppu>>>,
+        joypad: Rc<RefCell<Box<Joypad>>>,
+    ) -> Self {
+        Mbc {
+            mapper: mapper,
             ppu: ppu,
             joypad: joypad,
-            ram: Box::new([0u8; 0x2000])}
+            ram: Box::new([0u8; 0x2000]),
+        }
     }
 
-    pub fn set_rom(&mut self, rom: Box<Rom>){
+    pub fn set_rom(&mut self, rom: Box<Rom>) {
         self.mapper.borrow_mut().set_rom(rom);
     }
 
@@ -41,15 +44,15 @@ impl Mbc {
             0x0000u16...0x1FFFu16 => self.ram[addr as usize],
             0x2000u16...0x3FFFu16 => self.ppu.borrow_mut().read(addr & 0x2007),
             0x4016u16...0x4017u16 => self.joypad.borrow_mut().read(addr),
-            0x6000u16...0x7FFFu16 => { // self.sram[],
+            0x6000u16...0x7FFFu16 => {
+                // self.sram[],
                 0x00u8
-            },
+            }
             0x8000u16...0xFFFFu16 => {
                 let r = addr & 0x7FFFu16;
                 self.mapper.borrow().read_prg(r)
-            },
-            _ => panic!("mbc read error:#{:x}", addr)
-
+            }
+            _ => panic!("mbc read error:#{:x}", addr),
         };
         info!("Mbc::read({:04x}) -> {:x}", addr, x);
         x as u8
@@ -57,34 +60,26 @@ impl Mbc {
 
     pub fn read16(&self, addr: u16) -> u16 {
         let low = self.read(addr) as u16;
-        let high = self.read(addr+1) as u16;
+        let high = self.read(addr + 1) as u16;
         high << 8 | low
     }
 
     pub fn write(&mut self, addr: u16, value: u8) {
         info!("  Mbc::write({:x},{:x})", addr, value);
         match addr {
-            0x0000u16...0x1FFFu16 => {
-                self.ram[addr as usize] = value
-            },
-            0x2000u16...0x3FFFu16 => {
-                self.ppu.borrow_mut().write(addr & 0x2007, value)
-            },
+            0x0000u16...0x1FFFu16 => self.ram[addr as usize] = value,
+            0x2000u16...0x3FFFu16 => self.ppu.borrow_mut().write(addr & 0x2007, value),
             // 0x2000u16...0x3FFFu16 => self.io[], // dont use
-            0x4000u16...0x4013u16 => {}, // ignore(APU, etc)
-            0x4014u16             => {
-                self.ppu.borrow_mut().write(addr, value)
-            },
-            0x4015u16             => {
+            0x4000u16...0x4013u16 => {} // ignore(APU, etc)
+            0x4014u16 => self.ppu.borrow_mut().write(addr, value),
+            0x4015u16 => {
                 // ignore
-            },
-            0x4016u16...0x4017u16 => {
-                self.joypad.borrow_mut().write(addr,value)
-            },
+            }
+            0x4016u16...0x4017u16 => self.joypad.borrow_mut().write(addr, value),
             // 0x4020u16...0x5FFFu16 => self.io[], // extend ram
             // 0x6000u16...0x7FFFu16 => self.sram[],
             0x8000u16...0xFFFFu16 => panic!("cant write to ROM:{:x}", addr),
-             _ => panic!("mbc write error:#{:x}", addr)
+            _ => panic!("mbc write error:#{:x}", addr),
         };
     }
 

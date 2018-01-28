@@ -2,18 +2,32 @@ use nes::cpu::Cpu;
 
 #[allow(unused_variables)]
 pub trait AddressingMode {
-    fn read(&self, cpu: &mut Cpu) -> u8 { unimplemented!() }
-    fn write(&self, cpu: &mut Cpu, data: u8) { unimplemented!() }
-    fn read16(&self, cpu: &mut Cpu) -> u16 { unimplemented!() }
-    fn read16_addr(&self, cpu: &mut Cpu) -> u16 { unimplemented!() }
+    fn read(&self, cpu: &mut Cpu) -> u8 {
+        unimplemented!()
+    }
+    fn write(&self, cpu: &mut Cpu, data: u8) {
+        unimplemented!()
+    }
+    fn read16(&self, cpu: &mut Cpu) -> u16 {
+        unimplemented!()
+    }
+    fn read16_addr(&self, cpu: &mut Cpu) -> u16 {
+        unimplemented!()
+    }
 
-    fn length(&self) -> u16 { unimplemented!() }
-    fn is_page_crossed(&self) -> bool { false /* unimplemented!() */ }
+    fn length(&self) -> u16 {
+        unimplemented!()
+    }
+    fn is_page_crossed(&self) -> bool {
+        false /* unimplemented!() */
+    }
 }
 
 pub struct NoAccessAddressingMode {}
 impl AddressingMode for NoAccessAddressingMode {
-    fn length(&self) -> u16 { 0u16 }
+    fn length(&self) -> u16 {
+        0u16
+    }
 }
 
 pub struct MemoryAddressingMode {
@@ -23,7 +37,10 @@ pub struct MemoryAddressingMode {
 
 impl MemoryAddressingMode {
     pub fn new(addr: u16, size: u16) -> Self {
-        MemoryAddressingMode{addr: addr, size: size}
+        MemoryAddressingMode {
+            addr: addr,
+            size: size,
+        }
     }
 }
 
@@ -34,7 +51,7 @@ impl AddressingMode for MemoryAddressingMode {
     fn read16(&self, cpu: &mut Cpu) -> u16 {
         let mbc = cpu.mbc.borrow_mut();
         let low = mbc.read(self.addr) as u16;
-        let high = mbc.read(self.addr+1) as u16;
+        let high = mbc.read(self.addr + 1) as u16;
         high << 8 | low
     }
     fn read16_addr(&self, _: &mut Cpu) -> u16 {
@@ -43,7 +60,9 @@ impl AddressingMode for MemoryAddressingMode {
     fn write(&self, cpu: &mut Cpu, data: u8) {
         cpu.mbc.borrow_mut().write(self.addr, data)
     }
-    fn length(&self) -> u16 {self.size}
+    fn length(&self) -> u16 {
+        self.size
+    }
 }
 
 pub struct ImmediateAddressingMode {
@@ -53,7 +72,10 @@ pub struct ImmediateAddressingMode {
 
 impl ImmediateAddressingMode {
     pub fn new(value: u8, size: u16) -> Self {
-        ImmediateAddressingMode{value: value, size: size}
+        ImmediateAddressingMode {
+            value: value,
+            size: size,
+        }
     }
 }
 
@@ -67,7 +89,9 @@ impl AddressingMode for ImmediateAddressingMode {
     fn write(&self, _: &mut Cpu, _: u8) {
         unimplemented!()
     }
-    fn length(&self) -> u16 {self.size}
+    fn length(&self) -> u16 {
+        self.size
+    }
 }
 
 pub struct AccumuratorAddressingMode {
@@ -76,7 +100,7 @@ pub struct AccumuratorAddressingMode {
 
 impl AccumuratorAddressingMode {
     pub fn new() -> Self {
-        AccumuratorAddressingMode{size: 0}
+        AccumuratorAddressingMode { size: 0 }
     }
 }
 
@@ -88,7 +112,7 @@ impl AddressingMode for AccumuratorAddressingMode {
         cpu.a = data
     }
 
-    fn length(&self) -> u16 {self.size}
+    fn length(&self) -> u16 {
+        self.size
+    }
 }
-
-

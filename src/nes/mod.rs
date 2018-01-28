@@ -33,14 +33,14 @@ macro_rules !wrap_rc {
 impl Nes {
     pub fn new() -> Self {
         let mapper = wrap_rc!(Mapper::new());
-        let ppu    = wrap_rc!(Ppu::new(mapper.clone()));
+        let ppu = wrap_rc!(Ppu::new(mapper.clone()));
         let joypad = wrap_rc!(Joypad::new());
-        let mbc    = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+        let mbc = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
 
         ppu.borrow_mut().set_mbc(Rc::downgrade(&mbc));
         let cpu = Cpu::new(mbc.clone());
 
-        Nes{
+        Nes {
             cpu: cpu,
             mbc: mbc,
             ppu: ppu,
@@ -59,11 +59,10 @@ impl Nes {
         self.ppu.borrow_mut().dump();
     }
 
+    #[inline(never)]
     pub fn tick(&mut self) {
         let cpu_cycle = self.cpu.cycle();
-        let ppu_cycle = {
-            self.ppu.borrow_mut().cycle()
-        };
+        let ppu_cycle = { self.ppu.borrow_mut().cycle() };
 
         if cpu_cycle * 3 > ppu_cycle {
             self.ppu.borrow_mut().tick();
