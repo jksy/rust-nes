@@ -33,7 +33,7 @@ fn get_rom_filename() -> Result<(String), (String)> {
 }
 
 fn run_nes() -> Result<(), (String)> {
-    env_logger::init().unwrap();
+    env_logger::init();
 
     if env::args().count() != 2 {
         return Err("need only one argument".to_owned());
