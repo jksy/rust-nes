@@ -38,7 +38,7 @@ pub struct Ppu {
     is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
 
-    raw_bmp: Image,
+    output_frame: [u8; 256 * 240],
 
     tasks: Vec<Box<OamDmaTask>>,
 }
@@ -176,10 +176,10 @@ impl Ppu {
             is_display_changed: false,
             is_horizontal: horizontal,
 
-            raw_bmp: Image::new(512, 480),
-            mbc: Weak::default(),
-            mapper: mapper,
-            tasks: vec![],
+            output_frame: [0; 256 * 240],
+            mbc:      Weak::default(),
+            mapper:   mapper,
+            tasks   : vec![],
         }
     }
 
@@ -215,7 +215,12 @@ impl Ppu {
     pub fn render_image(&self, img: &mut Image) {
         for y in 0..240 {
             for x in 0..256 {
-                img.set_pixel(x, y, self.raw_bmp.get_pixel(x, y));
+                let palette_index = self.output_frame[(x + y * 256) as usize];
+                let color = PALETTE_COLORS[palette_index as usize];
+                let pixel = Pixel::new(color[0], color[1], color[2]);
+                img.set_pixel(x as u32,
+                              y as u32,
+                              pixel);
             }
         }
     }
@@ -441,9 +446,7 @@ impl Ppu {
 
     #[inline(always)]
     fn put_pixel(&mut self, palette_index: u8, x: u16, y: u16) {
-        let color = PALETTE_COLORS[palette_index as usize];
-        let pixel = Pixel::new(color[0], color[1], color[2]);
-        self.raw_bmp.set_pixel(x as u32, y as u32, pixel);
+        self.output_frame[(x + y * 256) as usize] = palette_index;
     }
 
     fn nametable_increment_value(&self) -> u16 {
