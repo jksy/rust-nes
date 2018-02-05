@@ -74,6 +74,9 @@ pub struct Ppu {
 
     output_frame: Vec<u8>,
 
+    fetched_background: BackgroundImage,
+    fetched_sprites: Vec<Sprite>,
+
     tasks: Vec<Box<OamDmaTask>>,
 }
 
@@ -178,6 +181,9 @@ impl Ppu {
             is_horizontal: horizontal,
 
             output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HIGHT) as usize],
+            fetched_background: BackgroundImage::empty(),
+            fetched_sprites: vec![],
+
             mbc:      Weak::default(),
             mapper:   mapper,
             tasks   : vec![],
@@ -224,18 +230,6 @@ impl Ppu {
                               pixel);
             }
         }
-    }
-
-    // TODO:no copy
-    fn read_vram_range(&mut self, start: u16, end: u16) -> Vec<u8> {
-        let size = (end - start) as usize;
-        let mut v = Vec::with_capacity(size);
-        unsafe {
-            v.set_len(size);
-        }
-        info!("v:{:?}, v.len:{:?}", v, v.len());
-        self.vram.read_internal_range(start..end, &mut v);
-        v
     }
 
     pub fn dump(&self) {
@@ -326,123 +320,171 @@ impl Ppu {
         base + (x / 8) + (y / 8) * 32
     }
 
-    fn attribute_from_point(&mut self, x: u16, y: u16) -> u8 {
+    fn attribute_addr_from_point(&mut self, x: u16, y: u16) -> u16 {
         let base = self.name_table_addr();
         let index_x = x / 32;
         let index_y = (y / 32) * 8;
         let index = index_x + index_y;
 
-        let addr = base + index + 0x03C0;
+        base + index + 0x03C0
+    }
+
+    fn attribute_from_point(&mut self, x: u16, y: u16) -> u8 {
+        let addr = self.attribute_addr_from_point(x, y);
         info!("attr addr:{:x}", addr);
         let attr = self.vram.read_internal(addr);
         attr
     }
 
-    #[inline(never)]
-    fn process_pixel(&mut self) {
+    fn fetch_background_image(&mut self) {
         let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
         let y = self.current_line as u16 + self.scroll_position[1] as u16;
 
-        info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
         // render BG
         let nametable_addr = self.name_table_addr_from_point(x, y);
-        let attribute = Attribute::new(self.attribute_from_point(x, y));
+        // let attribute = Attribute::new(self.attribute_from_point(x, y));
         let pattern_index = self.vram.read_internal(nametable_addr);
-        let bg_pattern_addr = self.bg_pattern_addr();
+        let pattern_addr = self.bg_pattern_addr() + (pattern_index as u16) * 2 * 8;
 
-        info!(
-            "nametable_addr:{:04x}, attr:{:?}, pat_index:{:04x}",
-            nametable_addr, attribute, pattern_index
-        );
+        info!("fetch_background_image {},{}, ctrl:{:x}", x, y, self.control);
+        self.fetched_background = BackgroundImage::from_vram_address(pattern_addr,
+                                                                     self.attribute_addr_from_point(x, y),
+                                                                     &mut self.vram);
+    }
 
-        self.render_pattern_pixel(
-            bg_pattern_addr,
-            pattern_index,
-            x,
-            y,
-            x,
-            y,
-            &attribute,
-            false,
-        );
+    fn fetch_sprites(&mut self) {
+        self.fetched_sprites.clear();
 
-        // render sprite
-        let sprite_pattern_base = self.sprite_pattern_addr();
-        self.status.remove(Status::SPRITE_ZERO_HIT); // clear sprite zero hit
+        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
+        let y = self.current_line as u16 + self.scroll_position[1] as u16;
+
         for sprite_index in 0..64 {
-            let sprite_y = self.oam_ram[sprite_index * 4] as u16;
-            let sprite_x = self.oam_ram[sprite_index * 4 + 3] as u16;
-            if y < sprite_y || sprite_y + 8 < y {
-                continue;
-            }
-            if x < sprite_x || sprite_x + 8 < x {
-                continue;
-            }
-            if (x - sprite_x) == 0 {
+            let start = sprite_index * 4;
+            let end = start + 4;
+            let sprite = Sprite::from_oam(&self.oam_ram[start..end], &mut self.vram);
+
+            if y < sprite.y || sprite.y + 8 < y {
                 continue;
             }
 
-            let pattern_index = self.oam_ram[sprite_index * 4 + 1];
-            let attr = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
+            self.fetched_sprites.push(sprite);
 
-            // TODO:replace optimal palette addr
-            self.render_pattern_pixel(
-                sprite_pattern_base,
-                pattern_index,
-                x - sprite_x,
-                y - sprite_y,
-                x,
-                y,
-                &attr,
-                true,
-            );
-            if sprite_index == 0 {
-                self.status.insert(Status::SPRITE_ZERO_HIT); // set sprite zero hit
+            if self.fetched_sprites.len() == 8 {
+                return;
             }
         }
     }
 
     #[inline(never)]
+    fn process_pixel(&mut self) {
+        if (self.current_cycle % 8) == 0 {
+            self.fetch_background_image();
+        }
+        if self.current_cycle == 0 {
+            self.fetch_sprites();
+        }
+
+        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
+        let y = self.current_line as u16 + self.scroll_position[1] as u16;
+
+        info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
+
+        let mut palette_index = self.fetched_background.get_palette_index(x % 8, y % 8, &mut self.vram);
+        self.put_pixel(palette_index, x, y);
+
+        for sprite in self.fetched_sprites.iter() {
+            if x <= sprite.x && sprite.x < x {
+                palette_index = sprite.get_palette_index(x - sprite.x,
+                                                         y - sprite.y,
+                                                         &mut self.vram);
+                break;
+            }
+        }
+
+        info!("palette_index {}", palette_index);
+        if palette_index != 0 {
+            self.put_pixel(palette_index, x, y);
+        }
+
+        // // render sprite
+        // let sprite_pattern_base = self.sprite_pattern_addr();
+        // self.status.remove(Status::SPRITE_ZERO_HIT); // clear sprite zero hit
+        // for sprite_index in 0..64 {
+        //     let sprite_y = self.oam_ram[sprite_index * 4] as u16;
+        //     let sprite_x = self.oam_ram[sprite_index * 4 + 3] as u16;
+        //     if y < sprite_y || sprite_y + 8 < y {
+        //         continue;
+        //     }
+        //     if x < sprite_x || sprite_x + 8 < x {
+        //         continue;
+        //     }
+        //     if (x - sprite_x) == 0 {
+        //         continue;
+        //     }
+
+        //     let pattern_index = self.oam_ram[sprite_index * 4 + 1];
+        //     let attr = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
+
+        //     // TODO:replace optimal palette addr
+        //     self.render_pattern_pixel(
+        //         sprite_pattern_base,
+        //         pattern_index,
+        //         x - sprite_x,
+        //         y - sprite_y,
+        //         x,
+        //         y,
+        //         &attr,
+        //         true,
+        //     );
+        //     if sprite_index == 0 {
+        //         self.status.insert(Status::SPRITE_ZERO_HIT); // set sprite zero hit
+        //     }
+        // }
+    }
+
+    #[inline(never)]
     fn render_pattern_pixel(
         &mut self,
-        pattern_base: u16,
-        pattern_index: u8,
+        background_image: &BackgroundImage,
+        // pattern_base: u16,
+        // pattern_index: u8,
         mut pattern_x: u16,
         mut pattern_y: u16,
         x: u16,
         y: u16,
-        attribute: &Attribute,
         is_sprite: bool,
     ) {
-        let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
-        let memory = self.read_vram_range(pattern_addr, pattern_addr + 16);
-        let pattern = Pattern::new(&memory);
+        // let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
+        // let memory = self.read_vram_range(pattern_addr, pattern_addr + 16);
+        //let pattern = background_image.pattern;
+        //let attribute = background_image.attribute;
 
-        if is_sprite && attribute.is_frip_horizontally() {
-            pattern_x = pattern.width() - (pattern_x & 0x07);
-        }
-        if is_sprite && attribute.is_frip_vertically() {
-            pattern_y = pattern.height() - (pattern_y & 0x07);
-        }
+        // if is_sprite && background_image.attribute.is_frip_horizontally() {
+        //     pattern_x = background_image.pattern.width() - (pattern_x & 0x07);
+        // }
+        // if is_sprite && background_image.attribute.is_frip_vertically() {
+        //     pattern_y = background_image.pattern.height() - (pattern_y & 0x07);
+        // }
 
-        let color_index = pattern.color_index((pattern_x & 0x07) as u8, (pattern_y & 0x07) as u8);
+        // let color_index = background_image.pattern.color_index((pattern_x & 0x07) as u8, (pattern_y & 0x07) as u8);
 
-        if is_sprite && color_index == 0 {
-            return;
-        }
+        // if is_sprite && color_index == 0 {
+        //     return;
+        // }
 
-        info!(
-            "pattern:addr:0x{:04x}, pattern_index:{:02x}",
-            pattern_addr, pattern_index
-        );
+        // // info!(
+        // //     "pattern:addr:0x{:04x}, pattern_index:{:02x}",
+        // //     pattern_addr, pattern_index
+        // // );
 
-        let tile_color = attribute.table_color(pattern_x, pattern_y) | color_index;
-        let palette_addr = if is_sprite {
-            PALETTE_SPRITE_ADDR + tile_color as u16
-        } else {
-            PALETTE_BASE_ADDR + tile_color as u16
-        };
-        let palette_index = self.vram.read_internal(palette_addr) & 0x3f;
+        // let tile_color = background_image.attribute.table_color(pattern_x, pattern_y) | color_index;
+        // let palette_addr = if is_sprite {
+        //     PALETTE_SPRITE_ADDR + tile_color as u16
+        // } else {
+        //     PALETTE_BASE_ADDR + tile_color as u16
+        // };
+        // let palette_index = self.vram.read_internal(palette_addr) & 0x3f;
+        let palette_index = background_image.get_palette_index(pattern_x, pattern_y, &mut self.vram);
         self.put_pixel(palette_index, x, y);
     }
 
@@ -557,22 +599,26 @@ impl Ppu {
 }
 
 #[derive(Debug)]
-struct Pattern<'a> {
-    low: &'a [u8],
-    high: &'a [u8],
+struct Pattern {
+    data: Vec<u8>,
+    // low: Vec<u8>,
+    // high: Vec<u8>,
 }
 
-impl<'a> Pattern<'a> {
-    fn new(data: &'a [u8]) -> Self {
+impl Pattern {
+    fn new(data: Vec<u8>) -> Self {
         Pattern {
-            low: &data[0..8],
-            high: &data[8..16],
+            data: data
+            // low: data[0..8],
+            // high: data[8..16],
         }
     }
 
     pub fn color_index(&self, x: u8, y: u8) -> u8 {
-        let low = self.low[y as usize] << x & 0x80;
-        let high = self.high[y as usize] << x & 0x80;
+        // let low = self.low[y as usize] << x & 0x80;
+        // let high = self.high[y as usize] << x & 0x80;
+        let low = self.data[y as usize] << x & 0x80;
+        let high = self.data[8 + y as usize] << x & 0x80;
         low >> 7 | high >> 6
     }
 
@@ -614,6 +660,79 @@ impl Attribute {
 
     pub fn is_frip_vertically(&self) -> bool {
         (self.attribute & 0x80) != 0
+    }
+}
+
+// ==
+struct BackgroundImage {
+    pattern: Pattern,
+    attribute: Attribute,
+}
+
+impl BackgroundImage {
+    fn from_vram_address(pattern_address: u16,
+                         attribute_address: u16,
+                         vram: &mut Vram) -> Self {
+        let pattern_memory = vram.read_vram_range(pattern_address, pattern_address + 16);
+        let attribute = vram.read(attribute_address);
+
+        BackgroundImage {
+            pattern: Pattern::new(pattern_memory),
+            attribute: Attribute::new(attribute),
+        }
+    }
+
+    fn empty() -> Self {
+        let pattern_memory = vec![0; 16];
+        let attribute = 0;
+
+        BackgroundImage {
+            pattern: Pattern::new(pattern_memory),
+            attribute: Attribute::new(attribute),
+        }
+    }
+
+    fn get_palette_index(&self, x: u16, y: u16, vram: &mut Vram) -> u8 {
+        let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
+        let tile_color = self.attribute.table_color(x, y) | color_index;
+        let palette_addr = PALETTE_BASE_ADDR + tile_color as u16;
+        let palette_index = vram.read_internal(palette_addr) & 0x3f;
+        palette_index
+    }
+}
+
+struct Sprite {
+    y: u16,
+    x: u16,
+    pattern: Pattern,
+    attribute: Attribute,
+}
+
+impl Sprite {
+    fn from_oam(oam: &[u8], vram: &mut Vram) -> Self {
+        let pattern_memory = vram.read_vram_range(oam[1] as u16, (oam[1] + 16) as u16);
+
+        Sprite{
+            y: oam[0] as u16,
+            x: oam[3] as u16,
+            pattern: Pattern::new(pattern_memory),
+            attribute: Attribute::new(oam[2]),
+        }
+        //     let sprite_y = self.oam_ram[sprite_index * 4] as u16;
+        //     let sprite_x = self.oam_ram[sprite_index * 4 + 3] as u16;
+        //     let pattern_index = self.oam_ram[sprite_index * 4 + 1];
+        //     let attr = Attribute::new(self.oam_ram[sprite_index * 4 + 2]);
+        //
+        // let pattern_addr = (pattern_index as u16) * 2 * 8 + pattern_base;
+        // let memory = self.read_vram_range(pattern_addr, pattern_addr + 16);
+    }
+
+    fn get_palette_index(&self, x: u16, y: u16, vram: &mut Vram) -> u8 {
+        let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
+        let tile_color = self.attribute.table_color(x, y) | color_index;
+        let palette_addr = PALETTE_BASE_ADDR + tile_color as u16;
+        let palette_index = vram.read_internal(palette_addr) & 0x3f;
+        palette_index
     }
 }
 
