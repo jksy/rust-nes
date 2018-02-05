@@ -5,6 +5,8 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate sdl2;
+#[macro_use]
+extern crate bitflags;
 
 use bmp::Image;
 use nes::Nes;

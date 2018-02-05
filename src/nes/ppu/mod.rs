@@ -13,9 +13,21 @@ use std::rc::Weak;
 use std::mem;
 use self::vram::Vram;
 
+bitflags! {
+    struct Control: u8 {
+        const ENABLE_NMI = 0x80; // VBlank時にNMIを発生
+        const MASTER_SLAVE = 0x40; // always true
+        const SPRITE_SIZE_16 = 0x20; // 0:8x8, 1:8x16
+        const BG_ADDRESS = 0x10; // 0:$0000, 1:$1000
+        const SPRITE_ADDRESS = 0x08; // 0:$0000, 1:$1000
+        const ADDR_INCREMENT_32 = 0x04; // 0: +=1 1: +=32
+        const NAME_TABLE_ADDR = 0x03; // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
+    }
+}
+
 pub struct Ppu {
     // PPU register
-    control: u8,              // $2000(w)
+    control: Control,         // $2000(w)
     mask: u8,                 // $2001(w)
     status: u8,               // $2002(r)
     oam_address: u8,          // $2003(w)
@@ -115,21 +127,6 @@ const PALETTE_BASE_ADDR: u16 = 0x3F00;
 const PALETTE_SPRITE_ADDR: u16 = 0x3F10;
 
 #[allow(dead_code)]
-const CONTROL_MASK_ENABLE_NMI: u8 = 0x80; // VBlank時にNMIを発生
-#[allow(dead_code)]
-const CONTROL_MASK_MASTER_SLAVE: u8 = 0x40; // always true
-#[allow(dead_code)]
-const CONTROL_MASK_SPRITE_SIZE_16: u8 = 0x20; // 0:8x8, 1:8x16
-#[allow(dead_code)]
-const CONTROL_MASK_BG_ADDRESS: u8 = 0x10; // 0:$0000, 1:$1000
-#[allow(dead_code)]
-const CONTROL_MASK_SPRITE_ADDRESS: u8 = 0x08; // 0:$0000, 1:$1000
-#[allow(dead_code)]
-const CONTROL_MASK_ADDR_INCREMENT: u8 = 0x04; // 0: +=1 1: +=32
-#[allow(dead_code)]
-const CONTROL_MASK_NAME_TABLE_ADDR: u8 = 0x03; // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
-
-#[allow(dead_code)]
 const SCANLINE: i32 = 261;
 #[allow(dead_code)]
 const CYCLE_PER_LINE: i32 = 341;
@@ -171,7 +168,7 @@ impl Ppu {
         let horizontal = { mapper.borrow().is_horizontal() };
 
         Ppu {
-            control: 0u8,
+            control: Control::empty(),
             mask: 0u8,
             status: 0u8,
             oam_address: 0u8,
@@ -300,7 +297,7 @@ impl Ppu {
     }
 
     fn bg_pattern_addr(&self) -> u16 {
-        if (self.control & CONTROL_MASK_BG_ADDRESS) != 0 {
+        if self.control.contains(Control::BG_ADDRESS) {
             0x1000u16
         } else {
             0x0000u16
@@ -308,7 +305,7 @@ impl Ppu {
     }
 
     fn sprite_pattern_addr(&self) -> u16 {
-        if (self.control & CONTROL_MASK_SPRITE_ADDRESS) != 0 {
+        if self.control.contains(Control::SPRITE_ADDRESS) {
             0x1000u16
         } else {
             0x0000u16
@@ -316,11 +313,11 @@ impl Ppu {
     }
 
     fn sprite_size_16(&self) -> bool {
-        (self.control & CONTROL_MASK_SPRITE_SIZE_16) != 0
+        self.control.contains(Control::SPRITE_SIZE_16)
     }
 
     fn name_table_addr(&self) -> u16 {
-        match self.control & CONTROL_MASK_NAME_TABLE_ADDR {
+        match (self.control & Control::NAME_TABLE_ADDR).bits {
             0 => 0x2000u16,
             1 => 0x2400u16,
             2 => 0x2800u16,
@@ -460,9 +457,10 @@ impl Ppu {
     }
 
     fn nametable_increment_value(&self) -> u16 {
-        match self.control & CONTROL_MASK_ADDR_INCREMENT {
-            0 => 1,
-            _ => 32,
+        if self.control.contains(Control::ADDR_INCREMENT_32) {
+            32
+        } else {
+            1
         }
     }
 
@@ -493,7 +491,7 @@ impl Ppu {
         match addr {
             0x2000 => {
                 // PPU_CTRL
-                self.control = data;
+                self.control = Control::from_bits_truncate(data);
                 self.is_display_changed = true
             }
             0x2001 => {
@@ -545,7 +543,7 @@ impl Ppu {
     }
 
     pub fn is_enable_nmi(&self) -> bool {
-        (self.control & CONTROL_MASK_ENABLE_NMI) != 0
+        self.control.contains(Control::ENABLE_NMI)
     }
 
     pub fn is_raise_nmi(&mut self) -> bool {
