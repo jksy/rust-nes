@@ -20,25 +20,26 @@ pub struct Ppu {
     status: u8,               // $2002(r)
     oam_address: u8,          // $2003(w)
     scroll_position: Vec<u8>, //  $2005(w*2)
-    vram: Vram,               // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
+    // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
     // 0x1000-0x1FFF:Pattern table2(mapped by chr rom)
     // 0x2000-0x23FF:Name table1
     // 0x2400-0x27FF:Name table2
     // 0x2800-0x2BFF:Name table3
     // 0x2C00-0x2FFF:Name table4
     // 0x3F00-0x3F1F:Pallete
-    //
+    vram: Vram,
+
     oam_ram: Vec<u8>, // for sprites
     mbc: Weak<RefCell<Box<Mbc>>>,
     mapper: Rc<RefCell<Box<Mapper>>>,
     cycle: u64,
-    current_line: u16,
-    current_cycle: u16,
+    current_line: i16,
+    current_cycle: i16,
     is_raise_nmi: bool, // true:when raise interruput
     is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
 
-    output_frame: [u8; 256 * 240],
+    output_frame: Vec<u8>,
 
     tasks: Vec<Box<OamDmaTask>>,
 }
@@ -157,6 +158,14 @@ const MASK_EMP_GREEN: u8 = 0x40u8;
 #[allow(dead_code)]
 const MASK_EMP_BLUE: u8 = 0x80u8;
 
+const SCREEN_WIDTH: i32 = 256;
+const SCREEN_HIGHT: i32 = 240;
+
+const RAISE_NMI_LINE: i16 = SCREEN_HIGHT as i16 + 1;
+const DROP_NMI_LINE: i16 = 260;
+const RAISE_VBLANK_LINE: i16 = SCREEN_HIGHT as i16 + 1;
+const DROP_VBLANK_LINE: i16 = 260;
+
 impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
         let horizontal = { mapper.borrow().is_horizontal() };
@@ -169,14 +178,14 @@ impl Ppu {
             vram: Vram::new(horizontal),
             oam_ram: vec![0x00u8; 0x0100],
             cycle: 0u64,
-            current_line: 0,
+            current_line: -1,
             current_cycle: 0,
             scroll_position: vec![0, 0],
             is_raise_nmi: false,
             is_display_changed: false,
             is_horizontal: horizontal,
 
-            output_frame: [0; 256 * 240],
+            output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HIGHT) as usize],
             mbc:      Weak::default(),
             mapper:   mapper,
             tasks   : vec![],
@@ -213,9 +222,9 @@ impl Ppu {
     }
 
     pub fn render_image(&self, img: &mut Image) {
-        for y in 0..240 {
-            for x in 0..256 {
-                let palette_index = self.output_frame[(x + y * 256) as usize];
+        for y in 0..SCREEN_HIGHT {
+            for x in 0..SCREEN_WIDTH {
+                let palette_index = self.output_frame[(x + y * SCREEN_WIDTH) as usize];
                 let color = PALETTE_COLORS[palette_index as usize];
                 let pixel = Pixel::new(color[0], color[1], color[2]);
                 img.set_pixel(x as u32,
@@ -257,20 +266,21 @@ impl Ppu {
         );
 
         if self.current_cycle == 1 {
-            if self.current_line == 241 {
+            if self.current_line == RAISE_VBLANK_LINE {
                 self.status |= STATUS_VBLANK; // on vblank flag
+            }
+            if self.current_line == DROP_VBLANK_LINE {
+                self.status &= !STATUS_VBLANK; // clear vblank flag
+            }
+            if self.current_line == RAISE_NMI_LINE {
                 self.is_raise_nmi = true;
             }
-            if self.current_line == 260 {
-                self.is_raise_nmi = false;
-            }
-            if self.current_line == 261 {
-                self.status &= !STATUS_VBLANK; // clear vblank flag
+            if self.current_line == DROP_NMI_LINE {
                 self.is_raise_nmi = false;
             }
         }
 
-        if self.current_line < 240 && self.current_cycle < 256 {
+        if -1 < self.current_line && self.current_line < SCREEN_HIGHT as i16 && self.current_cycle < SCREEN_WIDTH as i16 {
             self.process_pixel();
         }
 
@@ -284,7 +294,7 @@ impl Ppu {
             self.current_cycle = 0;
             self.current_line += 1;
             if self.current_line == 262 {
-                self.current_line = 0;
+                self.current_line = -1;
             }
         }
     }
@@ -338,8 +348,8 @@ impl Ppu {
 
     #[inline(never)]
     fn process_pixel(&mut self) {
-        let x = self.current_cycle + self.scroll_position[0] as u16;
-        let y = self.current_line + self.scroll_position[1] as u16;
+        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
+        let y = self.current_line as u16 + self.scroll_position[1] as u16;
 
         info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
         // render BG
@@ -446,7 +456,7 @@ impl Ppu {
 
     #[inline(always)]
     fn put_pixel(&mut self, palette_index: u8, x: u16, y: u16) {
-        self.output_frame[(x + y * 256) as usize] = palette_index;
+        self.output_frame[(x + y * SCREEN_WIDTH as u16) as usize] = palette_index;
     }
 
     fn nametable_increment_value(&self) -> u16 {
@@ -527,9 +537,8 @@ impl Ppu {
             0x4014 => {
                 // OAM_DMA
                 let source = (data as u16) << 8;
-                let target = self.oam_address as u16;
                 // push task, because cant borrow mbc here
-                self.tasks.push(Box::new(OamDmaTask::new(source, target)));
+                self.tasks.push(Box::new(OamDmaTask::new(source)));
             }
             _ => panic!("PPU write error:#{:x},#{:x}", addr, data),
         }
@@ -618,35 +627,30 @@ impl Attribute {
 // == TASK ==
 struct OamDmaTask {
     source: u16,
-    target: u16,
 }
 
 impl OamDmaTask {
-    fn new(source: u16, target: u16) -> Self {
+    fn new(source: u16) -> Self {
         OamDmaTask {
             source: source,
-            target: target,
         }
     }
 
     fn call(&self, ppu: &mut Ppu) {
         info!(
-            "PPU write oam(DMA)[{:02x}:{:02x}] = ({:02x}:{:02x})",
-            self.target,
-            self.target + 0x0100u16,
+            "PPU write oam(DMA)[:] = ({:02x}:{:02x})",
             self.source,
             self.source + 0x0100u16
         );
         // TODO:bulk copy
         for i in 0..0x0100u16 {
             let s = (self.source + i) as u16;
-            let t = (self.target + i) as usize;
             let mbc = ppu.mbc.upgrade().unwrap();
             let v = mbc.borrow().read(s);
-            ppu.oam_ram[t] = v;
+            ppu.oam_ram[i as usize] = v;
             info!(
                 "oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
-                t, s, v
+                i, s, v
             );
         }
         ppu.is_display_changed = true;
