@@ -25,10 +25,23 @@ bitflags! {
     }
 }
 
+bitflags! {
+    struct Mask: u8 {
+        const GRA = 0x01u8;
+        const SHOW_BACKGROUND_LEFTMOST = 0x02u8;
+        const SHOW_SPRITE_LEFTMOST = 0x04u8;
+        const SHOW_BACKGROUND = 0x08u8;
+        const SHOW_SPRITE = 0x10u8;
+        const EMP_RED = 0x20u8;
+        const EMP_GREEN = 0x40u8;
+        const EMP_BLUE = 0x80u8;
+    }
+}
+
 pub struct Ppu {
     // PPU register
     control: Control,         // $2000(w)
-    mask: u8,                 // $2001(w)
+    mask: Mask,               // $2001(w)
     status: u8,               // $2002(r)
     oam_address: u8,          // $2003(w)
     scroll_position: Vec<u8>, //  $2005(w*2)
@@ -138,23 +151,6 @@ const STATUS_SPRITE: u8 = 0x40u8; // sprite zero hit
 #[allow(dead_code)]
 const STATUS_VBLANK: u8 = 0x80u8;
 
-#[allow(dead_code)]
-const MASK_GRAY: u8 = 0x01u8;
-#[allow(dead_code)]
-const MASK_SHOW_BACKGROUND_LEFTMOST: u8 = 0x02u8;
-#[allow(dead_code)]
-const MASK_SHOW_SPRITE_LEFTMOST: u8 = 0x04u8;
-#[allow(dead_code)]
-const MASK_SHOW_BACKGROUND: u8 = 0x08u8;
-#[allow(dead_code)]
-const MASK_SHOW_SPRITE: u8 = 0x10u8;
-#[allow(dead_code)]
-const MASK_EMP_RED: u8 = 0x20u8;
-#[allow(dead_code)]
-const MASK_EMP_GREEN: u8 = 0x40u8;
-#[allow(dead_code)]
-const MASK_EMP_BLUE: u8 = 0x80u8;
-
 const SCREEN_WIDTH: i32 = 256;
 const SCREEN_HIGHT: i32 = 240;
 
@@ -169,7 +165,7 @@ impl Ppu {
 
         Ppu {
             control: Control::empty(),
-            mask: 0u8,
+            mask: Mask::empty(),
             status: 0u8,
             oam_address: 0u8,
             vram: Vram::new(horizontal),
@@ -496,7 +492,7 @@ impl Ppu {
             }
             0x2001 => {
                 // PPU_MASK
-                self.mask = data;
+                self.mask = Mask::from_bits_truncate(data);
                 self.is_display_changed = true
             }
             0x2003 => {
