@@ -147,10 +147,8 @@ const PALETTE_COLORS: [[u8; 3]; 64] = [
 const PALETTE_BASE_ADDR: u16 = 0x3F00;
 const PALETTE_SPRITE_ADDR: u16 = 0x3F10;
 
-#[allow(dead_code)]
-const SCANLINE: i32 = 261;
-#[allow(dead_code)]
-const CYCLE_PER_LINE: i32 = 341;
+const SCANLINE_PER_SCREEN: i16 = 262;
+const CYCLE_PER_LINE: i16 = 341;
 
 const SCREEN_WIDTH: i32 = 256;
 const SCREEN_HIGHT: i32 = 240;
@@ -284,10 +282,10 @@ impl Ppu {
         }
 
         self.current_cycle += 1;
-        if self.current_cycle == 341 {
+        if self.current_cycle == CYCLE_PER_LINE {
             self.current_cycle = 0;
             self.current_line += 1;
-            if self.current_line == 262 {
+            if self.current_line == SCANLINE_PER_SCREEN {
                 self.current_line = -1;
             }
         }
