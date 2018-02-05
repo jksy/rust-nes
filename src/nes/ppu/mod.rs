@@ -38,11 +38,19 @@ bitflags! {
     }
 }
 
+bitflags! {
+    struct Status: u8 {
+        const SPRITE_OVERFLOW = 0x20u8; // sprite over flow
+        const SPRITE_ZERO_HIT = 0x40u8; // sprite zero hit
+        const VBLANK = 0x80u8;
+    }
+}
+
 pub struct Ppu {
     // PPU register
     control: Control,         // $2000(w)
     mask: Mask,               // $2001(w)
-    status: u8,               // $2002(r)
+    status: Status,           // $2002(r)
     oam_address: u8,          // $2003(w)
     scroll_position: Vec<u8>, //  $2005(w*2)
     // 0x0000-0x0FFF:Pattern table1(mapped by chr rom)
@@ -144,13 +152,6 @@ const SCANLINE: i32 = 261;
 #[allow(dead_code)]
 const CYCLE_PER_LINE: i32 = 341;
 
-#[allow(dead_code)]
-const STATUS_OVERFLOW: u8 = 0x20u8; // sprite over flow
-#[allow(dead_code)]
-const STATUS_SPRITE: u8 = 0x40u8; // sprite zero hit
-#[allow(dead_code)]
-const STATUS_VBLANK: u8 = 0x80u8;
-
 const SCREEN_WIDTH: i32 = 256;
 const SCREEN_HIGHT: i32 = 240;
 
@@ -166,7 +167,7 @@ impl Ppu {
         Ppu {
             control: Control::empty(),
             mask: Mask::empty(),
-            status: 0u8,
+            status: Status::empty(),
             oam_address: 0u8,
             vram: Vram::new(horizontal),
             oam_ram: vec![0x00u8; 0x0100],
@@ -260,10 +261,10 @@ impl Ppu {
 
         if self.current_cycle == 1 {
             if self.current_line == RAISE_VBLANK_LINE {
-                self.status |= STATUS_VBLANK; // on vblank flag
+                self.status.insert(Status::VBLANK); // on vblank flag
             }
             if self.current_line == DROP_VBLANK_LINE {
-                self.status &= !STATUS_VBLANK; // clear vblank flag
+                self.status.remove(Status::VBLANK); // clear vblank flag
             }
             if self.current_line == RAISE_NMI_LINE {
                 self.is_raise_nmi = true;
@@ -369,7 +370,7 @@ impl Ppu {
 
         // render sprite
         let sprite_pattern_base = self.sprite_pattern_addr();
-        self.status &= !STATUS_SPRITE; // clear sprite zero hit
+        self.status.remove(Status::SPRITE_ZERO_HIT); // clear sprite zero hit
         for sprite_index in 0..64 {
             let sprite_y = self.oam_ram[sprite_index * 4] as u16;
             let sprite_x = self.oam_ram[sprite_index * 4 + 3] as u16;
@@ -398,7 +399,7 @@ impl Ppu {
                 true,
             );
             if sprite_index == 0 {
-                self.status |= STATUS_SPRITE; // set sprite zero hit
+                self.status.insert(Status::SPRITE_ZERO_HIT); // set sprite zero hit
             }
         }
     }
@@ -465,7 +466,7 @@ impl Ppu {
         match addr {
             0x2002 => {
                 // PPU_STATUS
-                self.status
+                self.status.bits()
             }
             0x2004 => {
                 // OAM_DATA
