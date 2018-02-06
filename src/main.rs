@@ -121,10 +121,6 @@ fn run_nes() -> Result<(), (String)> {
             thread::sleep(time::Duration::from_millis(100));
         }
 
-        // update canvas if display changed
-        if nes.is_display_changed() == false {
-            continue;
-        }
         // TODO:
         let elapsed = prev_render_time.elapsed().unwrap();
         if elapsed.as_secs() < 1 {
@@ -136,7 +132,6 @@ fn run_nes() -> Result<(), (String)> {
         render_nes_display(&nes, &mut img, &mut canvas, &mut texture);
 
         // draw nes display
-        nes.clear_display_changed();
         prev_render_time = SystemTime::now();
         // dumping ram & ppu
         // nes.dump();

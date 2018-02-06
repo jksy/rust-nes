@@ -69,7 +69,6 @@ pub struct Ppu {
     current_line: i16,
     current_cycle: i16,
     is_raise_nmi: bool, // true:when raise interruput
-    is_display_changed: bool,
     is_horizontal: bool, // horizontal scroll
 
     output_frame: Vec<u8>,
@@ -177,7 +176,6 @@ impl Ppu {
             current_cycle: 0,
             scroll_position: vec![0, 0],
             is_raise_nmi: false,
-            is_display_changed: false,
             is_horizontal: horizontal,
 
             output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
@@ -529,12 +527,10 @@ impl Ppu {
             0x2000 => {
                 // PPU_CTRL
                 self.control = Control::from_bits_truncate(data);
-                self.is_display_changed = true
             }
             0x2001 => {
                 // PPU_MASK
                 self.mask = Mask::from_bits_truncate(data);
-                self.is_display_changed = true
             }
             0x2003 => {
                 // OAM_ADDRESS
@@ -555,7 +551,6 @@ impl Ppu {
                     "PPU scroll position:{:x},{:x}",
                     self.scroll_position[0], self.scroll_position[1],
                 );
-                self.is_display_changed = true;
             }
             0x2006 => {
                 // PPU_ADDRESS
@@ -567,7 +562,6 @@ impl Ppu {
                 self.vram.write(address, data);
                 let inc = self.nametable_increment_value();
                 self.vram.increment_addr(inc);
-                self.is_display_changed = true;
             }
             0x4014 => {
                 // OAM_DMA
@@ -587,14 +581,6 @@ impl Ppu {
         let result = self.is_raise_nmi;
         self.is_raise_nmi = false;
         result
-    }
-
-    pub fn is_display_changed(&self) -> bool {
-        self.is_display_changed
-    }
-
-    pub fn clear_display_changed(&mut self) {
-        self.is_display_changed = false
     }
 }
 
@@ -730,7 +716,7 @@ impl Sprite {
     fn get_palette_index(&self, x: u16, y: u16, vram: &mut Vram) -> u8 {
         let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
         let tile_color = self.attribute.table_color(x, y) | color_index;
-        let palette_addr = PALETTE_BASE_ADDR + tile_color as u16;
+        let palette_addr = PALETTE_SPRITE_ADDR + tile_color as u16;
         let palette_index = vram.read_internal(palette_addr) & 0x3f;
         palette_index
     }
@@ -765,6 +751,5 @@ impl OamDmaTask {
                 i, s, v
             );
         }
-        ppu.is_display_changed = true;
     }
 }
