@@ -153,12 +153,12 @@ const PALETTE_SPRITE_ADDR: u16 = 0x3F10;
 const SCANLINE_PER_SCREEN: i16 = 262;
 const CYCLE_PER_LINE: i16 = 341;
 
-const SCREEN_WIDTH: i32 = 256;
-const SCREEN_HIGHT: i32 = 240;
+pub const SCREEN_WIDTH: i32 = 256;
+pub const SCREEN_HEIGHT: i32 = 240;
 
-const RAISE_NMI_LINE: i16 = SCREEN_HIGHT as i16 + 1;
+const RAISE_NMI_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 const DROP_NMI_LINE: i16 = 260;
-const RAISE_VBLANK_LINE: i16 = SCREEN_HIGHT as i16 + 1;
+const RAISE_VBLANK_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 const DROP_VBLANK_LINE: i16 = 260;
 
 impl Ppu {
@@ -180,7 +180,7 @@ impl Ppu {
             is_display_changed: false,
             is_horizontal: horizontal,
 
-            output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HIGHT) as usize],
+            output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
             fetched_background: BackgroundImage::empty(),
             fetched_sprites: vec![],
 
@@ -220,7 +220,7 @@ impl Ppu {
     }
 
     pub fn render_image(&self, img: &mut Image) {
-        for y in 0..SCREEN_HIGHT {
+        for y in 0..SCREEN_HEIGHT {
             for x in 0..SCREEN_WIDTH {
                 let palette_index = self.output_frame[(x + y * SCREEN_WIDTH) as usize];
                 let color = PALETTE_COLORS[palette_index as usize];
@@ -266,7 +266,7 @@ impl Ppu {
             }
         }
 
-        if -1 < self.current_line && self.current_line < SCREEN_HIGHT as i16 && self.current_cycle < SCREEN_WIDTH as i16 {
+        if -1 < self.current_line && self.current_line < SCREEN_HEIGHT as i16 && self.current_cycle < SCREEN_WIDTH as i16 {
             self.process_pixel();
         }
 

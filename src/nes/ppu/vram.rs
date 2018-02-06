@@ -163,10 +163,6 @@ impl Vram {
                 panic!("cant read PPU:0x{:04x}", addr);
             }
         };
-        // info!("read_with_buffer({:x}) buf:{:x} res:{:x}",
-        //       addr,
-        //       self.read_buffer,
-        //       result);
 
         result
     }
@@ -194,7 +190,7 @@ impl Vram {
 
     // copy memory from vram
     // dont check the memory type. (PaletteTable, PatternTable, NameTable)
-    pub fn read_internal_range(&mut self, range: Range<u16>, vec: &mut Vec<u8>) {
+    fn read_internal_range(&mut self, range: Range<u16>, vec: &mut Vec<u8>) {
         match range.start {
             0x0000...0x1FFF => {
                 let (index, target_addr) = Vram::calclate_patterntable_addr(range.start);

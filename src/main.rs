@@ -42,13 +42,17 @@ fn run_nes() -> Result<(), (String)> {
     }
     let rom_filename = get_rom_filename().unwrap();
 
+    let mut nes = Nes::new();
+
     let sdl_context = sdl2::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
 
+    let (screen_width, screen_height) = nes.screen_size();
+
     let window = video_subsystem
-        .window("rust-nes", 341, 261)
+        .window("rust-nes", screen_width, screen_height)
         .position_centered()
         .build()
         .unwrap();
@@ -72,7 +76,7 @@ fn run_nes() -> Result<(), (String)> {
     nes.reset();
 
     let mut texture = creator
-        .create_texture_streaming(PixelFormatEnum::RGB888, 256, 240)
+        .create_texture_streaming(PixelFormatEnum::RGB888, screen_width, screen_height)
         .unwrap();
 
     let mut slow = false;
@@ -174,10 +178,12 @@ fn render_nes_display(
 ) {
     nes.render_image(img);
 
+    let (screen_width, screen_height) = nes.screen_size();
+
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            for y in 0u32..240u32 {
-                for x in 0u32..256u32 {
+            for y in 0u32..screen_height {
+                for x in 0u32..screen_width {
                     let pixel = img.get_pixel(x, y);
                     let offset = (y * 256 * 4 + x * 4) as usize;
                     buffer[offset + 1] = pixel.g;
@@ -188,7 +194,7 @@ fn render_nes_display(
         })
         .unwrap();
     canvas
-        .copy(&texture, None, Some(Rect::new(0, 0, 255, 239)))
+        .copy(&texture, None, Some(Rect::new(0, 0, screen_height, screen_width)))
         .unwrap();
     canvas.present();
 }

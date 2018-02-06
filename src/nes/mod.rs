@@ -81,6 +81,10 @@ impl Nes {
         self.cpu.reset();
     }
 
+    pub fn screen_size(&self) -> (u32, u32) {
+        (ppu::SCREEN_WIDTH as u32, ppu::SCREEN_HEIGHT as u32)
+    }
+
     pub fn render_image(&self, img: &mut Image) {
         self.ppu.borrow().render_image(img)
     }
