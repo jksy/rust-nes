@@ -249,6 +249,7 @@ impl Ppu {
             self.current_cycle, self.current_cycle, self.current_line, self.current_line
         );
 
+
         if self.current_cycle == 1 {
             if self.current_line == RAISE_VBLANK_LINE {
                 self.status.insert(Status::VBLANK); // on vblank flag
@@ -265,6 +266,12 @@ impl Ppu {
         }
 
         if -1 < self.current_line && self.current_line < SCREEN_HEIGHT as i16 && self.current_cycle < SCREEN_WIDTH as i16 {
+            if (self.current_cycle % 8) == 0 {
+                self.fetch_background_image();
+            }
+            if self.current_cycle == 0 {
+                self.fetch_sprites();
+            }
             self.process_pixel();
         }
 
@@ -375,12 +382,6 @@ impl Ppu {
 
     #[inline(never)]
     fn process_pixel(&mut self) {
-        if (self.current_cycle % 8) == 0 {
-            self.fetch_background_image();
-        }
-        if self.current_cycle == 0 {
-            self.fetch_sprites();
-        }
 
         let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
         let y = self.current_line as u16 + self.scroll_position[1] as u16;
@@ -696,7 +697,9 @@ struct Sprite {
 
 impl Sprite {
     fn from_oam(oam: &[u8], vram: &mut Vram) -> Self {
-        let pattern_memory = vram.read_vram_range(oam[1] as u16, (oam[1] + 16) as u16);
+        warn!("from_oam oam = {:?}", oam);
+        let head_address = oam[1] as u16;
+        let pattern_memory = vram.read_vram_range(head_address, head_address + 16);
 
         Sprite{
             y: oam[0] as u16,
