@@ -83,7 +83,7 @@ fn run_nes() -> Result<(), (String)> {
     let mut prev_render_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
-    let mut img = Image::new(256, 240);
+    let mut img = Image::new(screen_width, screen_height);
 
     'running: loop {
         for event in events.poll_iter() {
