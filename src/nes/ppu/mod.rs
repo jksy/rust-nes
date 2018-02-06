@@ -159,6 +159,7 @@ const RAISE_NMI_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 const DROP_NMI_LINE: i16 = 260;
 const RAISE_VBLANK_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 const DROP_VBLANK_LINE: i16 = 260;
+const RESET_OAM_ADDRESS_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 
 impl Ppu {
     pub fn new(mapper: Rc<RefCell<Box<Mapper>>>) -> Self {
@@ -239,7 +240,6 @@ impl Ppu {
         // }
         // let mut file = File::create("vram.dmp").unwrap();
         // let _ = file.write_all(&vec).unwrap();
-
     }
 
     #[inline(never)]
@@ -276,7 +276,7 @@ impl Ppu {
         }
 
         // reset OAM address
-        if 257 <= self.current_line && self.current_line <= 320 {
+        if RESET_OAM_ADDRESS_LINE <= self.current_line && self.current_line <= SCANLINE_PER_SCREEN {
             self.oam_address = 0;
         }
 
@@ -390,12 +390,14 @@ impl Ppu {
         info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
 
         let mut palette_index = self.fetched_background.get_palette_index(x % 8, y % 8, &mut self.vram);
-        self.put_pixel(palette_index, x, y);
+        // self.put_pixel(palette_index, x, y);
 
         for sprite in self.fetched_sprites.iter() {
-            if x <= sprite.x && sprite.x < x {
-                palette_index = sprite.get_palette_index(x - sprite.x,
-                                                         y - sprite.y,
+            warn!("sprite = {:?}", sprite);
+            if sprite.in_bounding_x(x) {
+                warn!("found sprite = {:?}", sprite);
+                palette_index = sprite.get_palette_index((x - sprite.x) % 8,
+                                                         (y - sprite.y) % 8,
                                                          &mut self.vram);
                 break;
             }
@@ -689,6 +691,7 @@ impl BackgroundImage {
     }
 }
 
+#[derive(Debug)]
 struct Sprite {
     y: u16,
     x: u16,
@@ -723,6 +726,10 @@ impl Sprite {
         let palette_addr = PALETTE_SPRITE_ADDR + tile_color as u16;
         let palette_index = vram.read_internal(palette_addr) & 0x3f;
         palette_index
+    }
+
+    fn in_bounding_x(&self, x: u16) -> bool {
+        (self.x <= x) && (x < self.x + 8)
     }
 }
 
