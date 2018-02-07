@@ -363,10 +363,11 @@ impl Ppu {
         let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
         let y = self.current_line as u16 + self.scroll_position[1] as u16;
 
+        let sprite_pattern_base_addr = self.sprite_pattern_addr();
         for sprite_index in 0..64 {
             let start = sprite_index * 4;
             let end = start + 4;
-            let sprite = Sprite::from_oam(&self.oam_ram[start..end], &mut self.vram);
+            let sprite = Sprite::from_oam(&self.oam_ram[start..end], &mut self.vram, sprite_pattern_base_addr);
 
             if y < sprite.y || sprite.y + 8 < y {
                 continue;
@@ -696,9 +697,9 @@ struct Sprite {
 }
 
 impl Sprite {
-    fn from_oam(oam: &[u8], vram: &mut Vram) -> Self {
+    fn from_oam(oam: &[u8], vram: &mut Vram, sprite_pattern_base_addr: u16) -> Self {
         warn!("from_oam oam = {:?}", oam);
-        let head_address = oam[1] as u16;
+        let head_address = (oam[1] as u16) * 2 * 8 + sprite_pattern_base_addr;
         let pattern_memory = vram.read_vram_range(head_address, head_address + 16);
 
         Sprite{
