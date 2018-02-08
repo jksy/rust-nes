@@ -134,8 +134,7 @@ fn run_nes() -> Result<(), (String)> {
 
         // TODO:
         let elapsed = prev_render_time.elapsed().unwrap();
-        if elapsed.subsec_nanos() < 500_000_000 {  // every 500ms
-        // if elapsed.as_secs() < 1 {
+        if elapsed.subsec_nanos() < 100_000_000 {  // every 100ms
             continue;
         }
         prev_render_time = SystemTime::now();
