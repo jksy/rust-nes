@@ -93,7 +93,7 @@ impl Nes {
         (ppu::SCREEN_WIDTH as u32, ppu::SCREEN_HEIGHT as u32)
     }
 
-    pub fn render_image(&self, img: &mut Image) {
+    pub fn render_image(&self, img: &mut Vec<u8>) {
         self.ppu.borrow().render_image(img)
     }
 

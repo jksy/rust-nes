@@ -50,9 +50,10 @@ fn run_nes() -> Result<(), (String)> {
     let video_subsystem = sdl_context.video().unwrap();
 
     let (screen_width, screen_height) = nes.screen_size();
+    let (window_width, window_height) = (screen_width * 2, screen_height * 2);
 
     let window = video_subsystem
-        .window("rust-nes", screen_width, screen_height)
+        .window("rust-nes", window_width, window_height)
         .position_centered()
         .build()
         .unwrap();
@@ -84,11 +85,11 @@ fn run_nes() -> Result<(), (String)> {
     let mut prev_poll_event_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
-    let mut img = Image::new(screen_width, screen_height);
+    let mut img = vec![0u8; (screen_width * screen_height * 4) as usize]; // RGBA
 
     'running: loop {
         let elapsed = prev_poll_event_time.elapsed().unwrap();
-        if elapsed.subsec_nanos() > 50_000 { // every 50 msec
+        if elapsed.subsec_nanos() > 50_000_000 { // every 50 msec
             for event in events.poll_iter() {
                 match event {
                     Event::Quit { .. }
@@ -129,10 +130,12 @@ fn run_nes() -> Result<(), (String)> {
         if !nes.screen_rendered() {
             continue;
         }
+        nes.reset_screen_rendered();
 
         // TODO:
         let elapsed = prev_render_time.elapsed().unwrap();
-        if elapsed.subsec_nanos() < 500_000 {  // every 500ms
+        if elapsed.subsec_nanos() < 500_000_000 {  // every 500ms
+        // if elapsed.as_secs() < 1 {
             continue;
         }
         prev_render_time = SystemTime::now();
@@ -176,30 +179,22 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
 
 fn render_nes_screen(
     nes: &Nes,
-    img: &mut Image,
+    img: &mut Vec<u8>,
     canvas: &mut Canvas<Window>,
     texture: &mut Texture,
 ) {
     nes.render_image(img);
 
-    let (screen_width, screen_height) = nes.screen_size();
-
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            for y in 0u32..screen_height {
-                for x in 0u32..screen_width {
-                    let pixel = img.get_pixel(x, y);
-                    let offset = (y * 256 * 4 + x * 4) as usize;
-                    buffer[offset + 1] = pixel.g;
-                    buffer[offset + 2] = pixel.r;
-                    buffer[offset] = pixel.b;
-                }
-            }
+            buffer.copy_from_slice(img);
         })
         .unwrap();
+
     canvas
-        .copy(&texture, None, Some(Rect::new(0, 0, screen_height, screen_width)))
+        .copy(&texture, None, None)
         .unwrap();
+
     canvas.present();
 }
 
