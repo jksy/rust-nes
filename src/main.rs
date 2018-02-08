@@ -138,7 +138,7 @@ fn run_nes() -> Result<(), (String)> {
         prev_render_time = SystemTime::now();
 
         info!("========== draw image ===============");
-        render_nes_display(&nes, &mut img, &mut canvas, &mut texture);
+        render_nes_screen(&nes, &mut img, &mut canvas, &mut texture);
 
         // draw nes display
         prev_render_time = SystemTime::now();
@@ -174,7 +174,7 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
     return button_state;
 }
 
-fn render_nes_display(
+fn render_nes_screen(
     nes: &Nes,
     img: &mut Image,
     canvas: &mut Canvas<Window>,
