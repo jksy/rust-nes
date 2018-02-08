@@ -382,7 +382,7 @@ impl Ppu {
             let end = start + 4;
             let sprite = Sprite::from_oam(&self.oam_ram[start..end], &mut self.vram, sprite_pattern_base_addr);
 
-            if y < sprite.y || sprite.y + 8 < y {
+            if !sprite.in_bounding_y(y) {
                 continue;
             }
 
@@ -648,6 +648,10 @@ impl Sprite {
 
     fn in_bounding_x(&self, x: u16) -> bool {
         (self.x <= x) && (x < self.x + 8)
+    }
+
+    fn in_bounding_y(&self, y: u16) -> bool {
+        (self.y <= y) && (y < self.y + 8)
     }
 }
 
