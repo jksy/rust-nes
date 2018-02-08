@@ -378,9 +378,11 @@ impl Ppu {
         let pattern_addr = self.control.bg_pattern_address() + (pattern_index as u16) * 2 * 8;
 
         info!("fetch_background_image {},{}, ctrl:{:x}", x, y, self.control);
+        info!("pattern_index {:x}, pattern_addr {:x}", pattern_index, pattern_addr);
         self.fetched_background = BackgroundImage::from_vram_address(pattern_addr,
                                                                      self.attribute_addr_from_point(x, y),
                                                                      &mut self.vram);
+        info!("fetched_background {:?}", self.fetched_background);
     }
 
     #[inline(never)]
@@ -565,7 +567,18 @@ impl Attribute {
     }
 
     #[inline(always)]
-    pub fn table_color(&self, pattern_x: u16, pattern_y: u16) -> u8 {
+    pub fn table_color_for_background(&self, pattern_x: u16, pattern_y: u16) -> u8 {
+        let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
+            (true, true) => self.attribute & 0x03,
+            (false, true) => (self.attribute >> 2) & 0x03,
+            (true, false) => (self.attribute >> 4) & 0x03,
+            (false, false) => (self.attribute >> 6) & 0x03,
+        };
+        attr_table_color << 2
+    }
+
+    pub fn table_color_for_sprite(&self, pattern_x: u16, pattern_y: u16) -> u8 {
+        // (self.attribute & 0x03) + 4
         let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
             (true, true) => self.attribute & 0x03,
             (false, true) => (self.attribute >> 2) & 0x03,
@@ -585,7 +598,10 @@ impl Attribute {
 }
 
 // ==
+#[derive(Debug)]
 struct BackgroundImage {
+    pattern_addr: u16, // debug
+    attribute_addr: u16, // debug
     pattern: Pattern,
     attribute: Attribute,
 }
@@ -598,6 +614,8 @@ impl BackgroundImage {
         let attribute = vram.read(attribute_address);
 
         BackgroundImage {
+            pattern_addr: pattern_address,
+            attribute_addr: attribute_address,
             pattern: Pattern::new(pattern_memory),
             attribute: Attribute::new(attribute),
         }
@@ -608,6 +626,8 @@ impl BackgroundImage {
         let attribute = 0;
 
         BackgroundImage {
+            pattern_addr: 0,
+            attribute_addr: 0,
             pattern: Pattern::new(pattern_memory),
             attribute: Attribute::new(attribute),
         }
@@ -615,7 +635,7 @@ impl BackgroundImage {
 
     fn get_palette_index(&self, x: u16, y: u16, vram: &mut Vram) -> u8 {
         let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
-        let tile_color = self.attribute.table_color(x, y) | color_index;
+        let tile_color = self.attribute.table_color_for_background(x, y) | color_index;
         let palette_addr = PALETTE_BASE_ADDR + tile_color as u16;
         let palette_index = vram.read_internal(palette_addr) & 0x3f;
         palette_index
@@ -653,7 +673,7 @@ impl Sprite {
         }
 
         let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
-        let tile_color = self.attribute.table_color(x, y) | color_index;
+        let tile_color = self.attribute.table_color_for_sprite(x, y) | color_index;
         let palette_addr = PALETTE_SPRITE_ADDR + tile_color as u16;
         let palette_index = vram.read_internal(palette_addr) & 0x3f;
         palette_index
