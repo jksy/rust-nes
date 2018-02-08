@@ -338,13 +338,6 @@ impl Ppu {
         base + index + 0x03C0
     }
 
-    fn attribute_from_point(&mut self, x: u16, y: u16) -> u8 {
-        let addr = self.attribute_addr_from_point(x, y);
-        info!("attr addr:{:x}", addr);
-        let attr = self.vram.read_internal(addr);
-        attr
-    }
-
     fn fetch_background_image(&mut self) {
         let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
         let y = self.current_line as u16 + self.scroll_position[1] as u16;
@@ -386,7 +379,6 @@ impl Ppu {
 
     #[inline(never)]
     fn process_pixel(&mut self) {
-
         let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
         let y = self.current_line as u16 + self.scroll_position[1] as u16;
 
