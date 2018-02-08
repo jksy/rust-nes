@@ -59,6 +59,14 @@ impl Nes {
         self.ppu.borrow_mut().dump();
     }
 
+    pub fn screen_rendered(&self) -> bool {
+        self.ppu.borrow_mut().screen_rendered()
+    }
+
+    pub fn reset_screen_rendered(&self) -> bool {
+        self.ppu.borrow_mut().screen_rendered()
+    }
+
     #[inline(never)]
     pub fn tick(&mut self) {
         let cpu_cycle = self.cpu.cycle();

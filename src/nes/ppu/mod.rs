@@ -103,6 +103,7 @@ pub struct Ppu {
     current_line: i16,
     current_cycle: i16,
     is_raise_nmi: bool, // true:when raise interruput
+    done_rendered: bool,
 
     output_frame: Vec<u8>,
 
@@ -210,6 +211,7 @@ impl Ppu {
             current_cycle: 0,
             scroll_position: vec![0, 0],
             is_raise_nmi: false,
+            done_rendered: false,
 
             output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
             fetched_background: BackgroundImage::empty(),
@@ -263,6 +265,14 @@ impl Ppu {
         }
     }
 
+    pub fn screen_rendered(&mut self) -> bool {
+        self.done_rendered
+    }
+
+    pub fn reset_screen_rendered(&mut self) {
+        self.done_rendered = true
+    }
+
     pub fn dump(&self) {
         // let mut file = File::create("vram.dmp").unwrap();
         // let _ = file.write_all(&self.vram).unwrap();
@@ -288,6 +298,7 @@ impl Ppu {
             }
             if self.current_line == DROP_VBLANK_LINE {
                 self.status.remove(Status::VBLANK); // clear vblank flag
+                self.done_rendered = true;
             }
             if self.current_line == RAISE_NMI_LINE {
                 self.is_raise_nmi = true;
