@@ -103,7 +103,6 @@ pub struct Ppu {
     current_line: i16,
     current_cycle: i16,
     is_raise_nmi: bool, // true:when raise interruput
-    is_horizontal: bool, // horizontal scroll
 
     output_frame: Vec<u8>,
 
@@ -211,7 +210,6 @@ impl Ppu {
             current_cycle: 0,
             scroll_position: vec![0, 0],
             is_raise_nmi: false,
-            is_horizontal: horizontal,
 
             output_frame: vec![0; (SCREEN_WIDTH * SCREEN_HEIGHT) as usize],
             fetched_background: BackgroundImage::empty(),
