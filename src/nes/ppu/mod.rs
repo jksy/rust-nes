@@ -674,10 +674,11 @@ impl OamDmaTask {
             self.source + 0x0100u16
         );
         // TODO:bulk copy
+        let mbc = ppu.mbc.upgrade().unwrap();
+        let mbc = mbc.borrow();
         for i in 0..0x0100u16 {
             let s = (self.source + i) as u16;
-            let mbc = ppu.mbc.upgrade().unwrap();
-            let v = mbc.borrow().read(s);
+            let v = mbc.read(s);
             ppu.oam_ram[i as usize] = v;
             info!(
                 "oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",

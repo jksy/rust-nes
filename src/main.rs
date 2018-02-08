@@ -81,32 +81,37 @@ fn run_nes() -> Result<(), (String)> {
 
     let mut slow = false;
     let mut prev_render_time = SystemTime::now();
+    let mut prev_poll_event_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
     let mut img = Image::new(screen_width, screen_height);
 
     'running: loop {
-        for event in events.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    break 'running;
+        let elapsed = prev_poll_event_time.elapsed().unwrap();
+        if elapsed.subsec_nanos() > 50_000 { // every 50 msec
+            for event in events.poll_iter() {
+                match event {
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => {
+                        break 'running;
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        slow = !slow;
+                    }
+                    Event::KeyDown { .. } | Event::KeyUp { .. } => {
+                        button_state_changed = true;
+                    }
+                    _ => {}
                 }
-                Event::KeyDown {
-                    keycode: Some(Keycode::S),
-                    ..
-                } => {
-                    slow = !slow;
-                }
-                Event::KeyDown { .. } | Event::KeyUp { .. } => {
-                    button_state_changed = true;
-                }
-                _ => {}
+                info!("event:{:?}", event);
             }
-            info!("event:{:?}", event);
+            prev_poll_event_time = SystemTime::now();
         }
 
         if button_state_changed {
