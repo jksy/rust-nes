@@ -280,6 +280,10 @@ impl Ppu {
             self.oam_address = 0;
         }
 
+        self.update_cycle();
+    }
+
+    fn update_cycle(&mut self) {
         self.current_cycle += 1;
         if self.current_cycle == CYCLE_PER_LINE {
             self.current_cycle = 0;
