@@ -338,9 +338,15 @@ impl Ppu {
         base + index + 0x03C0
     }
 
+    fn current_point(&self) -> (u16 ,u16) {
+        (
+            self.current_cycle as u16 + self.scroll_position[0] as u16,
+            self.current_line as u16 + self.scroll_position[1] as u16
+        )
+    }
+
     fn fetch_background_image(&mut self) {
-        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
-        let y = self.current_line as u16 + self.scroll_position[1] as u16;
+        let (x,y) = self.current_point();
 
         // render BG
         let nametable_addr = self.name_table_addr_from_point(x, y);
@@ -356,8 +362,7 @@ impl Ppu {
     fn fetch_sprites(&mut self) {
         self.fetched_sprites.clear();
 
-        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
-        let y = self.current_line as u16 + self.scroll_position[1] as u16;
+        let (x,y) = self.current_point();
 
         let sprite_pattern_base_addr = self.sprite_pattern_addr();
         for sprite_index in 0..64 {
@@ -379,8 +384,7 @@ impl Ppu {
 
     #[inline(never)]
     fn process_pixel(&mut self) {
-        let x = self.current_cycle as u16 + self.scroll_position[0] as u16;
-        let y = self.current_line as u16 + self.scroll_position[1] as u16;
+        let (x,y) = self.current_point();
 
         info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
 
