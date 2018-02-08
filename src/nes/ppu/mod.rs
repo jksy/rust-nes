@@ -18,10 +18,44 @@ bitflags! {
         const ENABLE_NMI = 0x80; // VBlank時にNMIを発生
         const MASTER_SLAVE = 0x40; // always true
         const SPRITE_SIZE_16 = 0x20; // 0:8x8, 1:8x16
-        const BG_ADDRESS = 0x10; // 0:$0000, 1:$1000
-        const SPRITE_ADDRESS = 0x08; // 0:$0000, 1:$1000
+        const BG_PATTERN_ADDRESS = 0x10; // 0:$0000, 1:$1000
+        const SPRITE_PATTERN_ADDRESS = 0x08; // 0:$0000, 1:$1000
         const ADDR_INCREMENT_32 = 0x04; // 0: +=1 1: +=32
         const NAME_TABLE_ADDR = 0x03; // 00:$2000, 01:$2400, 10:$2800, 11:$2C00
+    }
+}
+
+impl Control {
+    fn is_enable_nmi(&self) -> bool {
+        self.contains(Control::ENABLE_NMI)
+    }
+
+    fn sprite_size_16(&self) -> bool {
+        self.contains(Control::SPRITE_SIZE_16)
+    }
+
+    fn bg_pattern_address(&self) -> u16 {
+        if self.contains(Control::BG_PATTERN_ADDRESS) {
+            0x1000u16
+        } else {
+            0x0000u16
+        }
+    }
+
+    fn sprite_pattern_addr(&self) -> u16 {
+        if self.contains(Control::SPRITE_PATTERN_ADDRESS) {
+            0x1000u16
+        } else {
+            0x0000u16
+        }
+    }
+
+    fn nametable_increment_value(&self) -> u16 {
+        if self.contains(Control::ADDR_INCREMENT_32) {
+            32
+        } else {
+            1
+        }
     }
 }
 
@@ -294,26 +328,6 @@ impl Ppu {
         }
     }
 
-    fn bg_pattern_addr(&self) -> u16 {
-        if self.control.contains(Control::BG_ADDRESS) {
-            0x1000u16
-        } else {
-            0x0000u16
-        }
-    }
-
-    fn sprite_pattern_addr(&self) -> u16 {
-        if self.control.contains(Control::SPRITE_ADDRESS) {
-            0x1000u16
-        } else {
-            0x0000u16
-        }
-    }
-
-    fn sprite_size_16(&self) -> bool {
-        self.control.contains(Control::SPRITE_SIZE_16)
-    }
-
     fn name_table_addr(&self) -> u16 {
         match (self.control & Control::NAME_TABLE_ADDR).bits {
             0 => 0x2000u16,
@@ -351,7 +365,7 @@ impl Ppu {
         // render BG
         let nametable_addr = self.name_table_addr_from_point(x, y);
         let pattern_index = self.vram.read_internal(nametable_addr);
-        let pattern_addr = self.bg_pattern_addr() + (pattern_index as u16) * 2 * 8;
+        let pattern_addr = self.control.bg_pattern_address() + (pattern_index as u16) * 2 * 8;
 
         info!("fetch_background_image {},{}, ctrl:{:x}", x, y, self.control);
         self.fetched_background = BackgroundImage::from_vram_address(pattern_addr,
@@ -364,7 +378,7 @@ impl Ppu {
 
         let (x,y) = self.current_point();
 
-        let sprite_pattern_base_addr = self.sprite_pattern_addr();
+        let sprite_pattern_base_addr = self.control.sprite_pattern_addr();
         for sprite_index in 0..64 {
             let start = sprite_index * 4;
             let end = start + 4;
@@ -412,13 +426,6 @@ impl Ppu {
         self.output_frame[(x + y * SCREEN_WIDTH as u16) as usize] = palette_index;
     }
 
-    fn nametable_increment_value(&self) -> u16 {
-        if self.control.contains(Control::ADDR_INCREMENT_32) {
-            32
-        } else {
-            1
-        }
-    }
 
     pub fn read(&mut self, addr: u16) -> u8 {
         info!("PPU read:{:04x}", addr);
@@ -435,7 +442,7 @@ impl Ppu {
                 // PPU_DATA
                 let address = self.vram.get_addr();
                 let result = self.vram.read(address);
-                let inc = self.nametable_increment_value();
+                let inc = self.control.nametable_increment_value();
                 self.vram.increment_addr(inc);
                 result
             }
@@ -481,7 +488,7 @@ impl Ppu {
                 // PPU_DATA
                 let mut address = self.vram.get_addr();
                 self.vram.write(address, data);
-                let inc = self.nametable_increment_value();
+                let inc = self.control.nametable_increment_value();
                 self.vram.increment_addr(inc);
             }
             0x4014 => {
@@ -495,7 +502,7 @@ impl Ppu {
     }
 
     pub fn is_enable_nmi(&self) -> bool {
-        self.control.contains(Control::ENABLE_NMI)
+        self.control.is_enable_nmi()
     }
 
     pub fn is_raise_nmi(&mut self) -> bool {
