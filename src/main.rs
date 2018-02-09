@@ -5,6 +5,8 @@ extern crate env_logger;
 #[macro_use]
 extern crate log;
 extern crate sdl2;
+#[macro_use]
+extern crate bitflags;
 
 use bmp::Image;
 use nes::Nes;
@@ -40,13 +42,18 @@ fn run_nes() -> Result<(), (String)> {
     }
     let rom_filename = get_rom_filename().unwrap();
 
+    let mut nes = Nes::new();
+
     let sdl_context = sdl2::init().unwrap();
 
     // window & canvas
     let video_subsystem = sdl_context.video().unwrap();
 
+    let (screen_width, screen_height) = nes.screen_size();
+    let (window_width, window_height) = (screen_width * 2, screen_height * 2);
+
     let window = video_subsystem
-        .window("rust-nes", 341, 261)
+        .window("rust-nes", window_width, window_height)
         .position_centered()
         .build()
         .unwrap();
@@ -70,37 +77,42 @@ fn run_nes() -> Result<(), (String)> {
     nes.reset();
 
     let mut texture = creator
-        .create_texture_streaming(PixelFormatEnum::RGB888, 256, 240)
+        .create_texture_streaming(PixelFormatEnum::RGB888, screen_width, screen_height)
         .unwrap();
 
     let mut slow = false;
     let mut prev_render_time = SystemTime::now();
+    let mut prev_poll_event_time = SystemTime::now();
     let mut button_state = 0u8;
     let mut button_state_changed = false;
-    let mut img = Image::new(256, 240);
+    let mut img = vec![0u8; (screen_width * screen_height * 4) as usize]; // RGBA
 
     'running: loop {
-        for event in events.poll_iter() {
-            match event {
-                Event::Quit { .. }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                } => {
-                    break 'running;
+        let elapsed = prev_poll_event_time.elapsed().unwrap();
+        if elapsed.subsec_nanos() > 50_000_000 { // every 50 msec
+            for event in events.poll_iter() {
+                match event {
+                    Event::Quit { .. }
+                    | Event::KeyDown {
+                        keycode: Some(Keycode::Escape),
+                        ..
+                    } => {
+                        break 'running;
+                    }
+                    Event::KeyDown {
+                        keycode: Some(Keycode::S),
+                        ..
+                    } => {
+                        slow = !slow;
+                    }
+                    Event::KeyDown { .. } | Event::KeyUp { .. } => {
+                        button_state_changed = true;
+                    }
+                    _ => {}
                 }
-                Event::KeyDown {
-                    keycode: Some(Keycode::S),
-                    ..
-                } => {
-                    slow = !slow;
-                }
-                Event::KeyDown { .. } | Event::KeyUp { .. } => {
-                    button_state_changed = true;
-                }
-                _ => {}
+                info!("event:{:?}", event);
             }
-            info!("event:{:?}", event);
+            prev_poll_event_time = SystemTime::now();
         }
 
         if button_state_changed {
@@ -115,22 +127,22 @@ fn run_nes() -> Result<(), (String)> {
             thread::sleep(time::Duration::from_millis(100));
         }
 
-        // update canvas if display changed
-        if nes.is_display_changed() == false {
+        if !nes.screen_rendered() {
             continue;
         }
+        nes.reset_screen_rendered();
+
         // TODO:
         let elapsed = prev_render_time.elapsed().unwrap();
-        if elapsed.as_secs() < 1 {
+        if elapsed.subsec_nanos() < 100_000_000 {  // every 100ms
             continue;
         }
         prev_render_time = SystemTime::now();
 
         info!("========== draw image ===============");
-        render_nes_display(&nes, &mut img, &mut canvas, &mut texture);
+        render_nes_screen(&nes, &mut img, &mut canvas, &mut texture);
 
         // draw nes display
-        nes.clear_display_changed();
         prev_render_time = SystemTime::now();
         // dumping ram & ppu
         // nes.dump();
@@ -164,9 +176,9 @@ fn get_button_state(events: &sdl2::EventPump) -> u8 {
     return button_state;
 }
 
-fn render_nes_display(
+fn render_nes_screen(
     nes: &Nes,
-    img: &mut Image,
+    img: &mut Vec<u8>,
     canvas: &mut Canvas<Window>,
     texture: &mut Texture,
 ) {
@@ -174,20 +186,14 @@ fn render_nes_display(
 
     texture
         .with_lock(None, |buffer: &mut [u8], pitch: usize| {
-            for y in 0u32..240u32 {
-                for x in 0u32..256u32 {
-                    let pixel = img.get_pixel(x, y);
-                    let offset = (y * 256 * 4 + x * 4) as usize;
-                    buffer[offset + 1] = pixel.g;
-                    buffer[offset + 2] = pixel.r;
-                    buffer[offset] = pixel.b;
-                }
-            }
+            buffer.copy_from_slice(img);
         })
         .unwrap();
+
     canvas
-        .copy(&texture, None, Some(Rect::new(0, 0, 255, 239)))
+        .copy(&texture, None, None)
         .unwrap();
+
     canvas.present();
 }
 

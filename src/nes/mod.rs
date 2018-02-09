@@ -59,6 +59,14 @@ impl Nes {
         self.ppu.borrow_mut().dump();
     }
 
+    pub fn screen_rendered(&self) -> bool {
+        self.ppu.borrow_mut().screen_rendered()
+    }
+
+    pub fn reset_screen_rendered(&self) -> bool {
+        self.ppu.borrow_mut().screen_rendered()
+    }
+
     #[inline(never)]
     pub fn tick(&mut self) {
         let cpu_cycle = self.cpu.cycle();
@@ -81,16 +89,12 @@ impl Nes {
         self.cpu.reset();
     }
 
-    pub fn render_image(&self, img: &mut Image) {
+    pub fn screen_size(&self) -> (u32, u32) {
+        (ppu::SCREEN_WIDTH as u32, ppu::SCREEN_HEIGHT as u32)
+    }
+
+    pub fn render_image(&self, img: &mut Vec<u8>) {
         self.ppu.borrow().render_image(img)
-    }
-
-    pub fn is_display_changed(&self) -> bool {
-        self.ppu.borrow().is_display_changed()
-    }
-
-    pub fn clear_display_changed(&self) {
-        self.ppu.borrow_mut().clear_display_changed()
     }
 
     pub fn set_joypad_button_state(&self, state: u8) {
