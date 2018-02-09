@@ -245,7 +245,6 @@ impl Ppu {
     #[inline(never)]
     pub fn tick(&mut self) {
         self.cycle = self.cycle.wrapping_add(1);
-        info!("ppu cycle:{:}", self.cycle);
         if self.tasks.len() > 0 {
             let task = self.tasks.pop().unwrap();
             task.call(self);
@@ -286,11 +285,6 @@ impl Ppu {
 
     #[inline(never)]
     fn process_cycle(&mut self) {
-        info!(
-            "ppu ({:x}({}),{:x}({}))",
-            self.current_cycle, self.current_cycle, self.current_line, self.current_line
-        );
-
 
         if self.current_cycle == 1 {
             if self.current_line == RAISE_VBLANK_LINE {
@@ -415,12 +409,10 @@ impl Ppu {
 
         info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
 
-        let mut palette_index = self.fetched_background.get_palette_index(x % 8, y % 8, &mut self.vram);
+        let mut palette_index = self.fetched_background.get_palette_index(x & 0x07, y & 0x07, &mut self.vram);
 
         for sprite in self.fetched_sprites.iter() {
-            warn!("sprite = {:?}", sprite);
             if sprite.in_bounding_x(x) {
-                warn!("found sprite = {:?}", sprite);
                 palette_index = sprite.get_palette_index((x - sprite.x) % 8,
                                                          (y - sprite.y) % 8,
                                                          &mut self.vram);
@@ -441,7 +433,6 @@ impl Ppu {
 
 
     pub fn read(&mut self, addr: u16) -> u8 {
-        info!("PPU read:{:04x}", addr);
         match addr {
             0x2002 => {
                 // PPU_STATUS
@@ -476,11 +467,9 @@ impl Ppu {
             0x2003 => {
                 // OAM_ADDRESS
                 self.oam_address = data;
-                info!("PPU OAM write addr : 0x{:02x}", data);
             }
             0x2004 => {
                 // OAM_DATA
-                info!("PPU write oam_ram[{:02x}] = {:02x}", self.oam_address, data);
                 self.oam_ram[self.oam_address as usize] = data;
                 self.oam_address = self.oam_address.wrapping_add(1);
             }
@@ -488,10 +477,6 @@ impl Ppu {
                 // PPU_SCROLL
                 self.scroll_position.insert(0, data);
                 self.scroll_position.truncate(2);
-                info!(
-                    "PPU scroll position:{:x},{:x}",
-                    self.scroll_position[0], self.scroll_position[1],
-                );
             }
             0x2006 => {
                 // PPU_ADDRESS
@@ -538,11 +523,9 @@ impl Pattern {
     }
 
     pub fn color_index(&self, x: u8, y: u8) -> u8 {
-        // let low = self.low[y as usize] << x & 0x80;
-        // let high = self.high[y as usize] << x & 0x80;
         let low = self.data[y as usize] << x & 0x80;
         let high = self.data[8 + y as usize] << x & 0x80;
-        low >> 7 | high >> 6
+        (low >> 7 | high >> 6) & 0x03
     }
 
     pub fn width(&self) -> u16 {
@@ -566,7 +549,6 @@ impl Attribute {
         Attribute { attribute: attr }
     }
 
-    #[inline(always)]
     pub fn table_color_for_background(&self, pattern_x: u16, pattern_y: u16) -> u8 {
         let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
             (true, true) => self.attribute & 0x03,
@@ -578,14 +560,7 @@ impl Attribute {
     }
 
     pub fn table_color_for_sprite(&self, pattern_x: u16, pattern_y: u16) -> u8 {
-        // (self.attribute & 0x03) + 4
-        let attr_table_color = match (pattern_x & 0x03 < 2, pattern_y & 0x03 < 2) {
-            (true, true) => self.attribute & 0x03,
-            (false, true) => (self.attribute >> 2) & 0x03,
-            (true, false) => (self.attribute >> 4) & 0x03,
-            (false, false) => (self.attribute >> 6) & 0x03,
-        };
-        attr_table_color << 2
+        (self.attribute & 0x03) << 2
     }
 
     pub fn is_frip_horizontally(&self) -> bool {
@@ -635,7 +610,7 @@ impl BackgroundImage {
 
     fn get_palette_index(&self, x: u16, y: u16, vram: &mut Vram) -> u8 {
         let color_index = self.pattern.color_index((x & 0x07) as u8, (y & 0x07) as u8);
-        let tile_color = self.attribute.table_color_for_background(x, y) | color_index;
+        let tile_color = self.attribute.table_color_for_background(x / 8 % 32, y / 8 % 32) | color_index;
         let palette_addr = PALETTE_BASE_ADDR + tile_color as u16;
         let palette_index = vram.read_internal(palette_addr) & 0x3f;
         palette_index
@@ -652,7 +627,6 @@ struct Sprite {
 
 impl Sprite {
     fn from_oam(oam: &[u8], vram: &mut Vram, sprite_pattern_base_addr: u16) -> Self {
-        warn!("from_oam oam = {:?}", oam);
         let head_address = (oam[1] as u16) * 2 * 8 + sprite_pattern_base_addr;
         let pattern_memory = vram.read_vram_range(head_address, head_address + 16);
 
