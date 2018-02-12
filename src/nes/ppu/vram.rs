@@ -179,7 +179,9 @@ impl Vram {
             }
             0x3F00...0x3FFF => {
                 let (index, target_addr) = Vram::calclate_palettetable_addr(addr);
-                self.palette_tables[index].borrow().read(target_addr)
+                let result = self.palette_tables[index].borrow().read(target_addr);
+                debug!("read_palette[{:x}][{:x}]({:x}) = {:x}", index, target_addr, addr, result);
+                result
             }
             _ => {
                 panic!("cant read PPU:0x{:04x}", addr);
@@ -226,7 +228,7 @@ impl Vram {
         unsafe {
             v.set_len(size);
         }
-        info!("v:{:?}, v.len:{:?}", v, v.len());
+        debug!("v:{:?}, v.len:{:?}", v, v.len());
         self.read_internal_range(start..end, &mut v);
         v
     }

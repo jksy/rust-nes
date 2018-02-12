@@ -192,8 +192,6 @@ pub const SCREEN_HEIGHT: i32 = 240;
 
 const RAISE_NMI_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 const DROP_NMI_LINE: i16 = 260;
-const RAISE_VBLANK_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
-const DROP_VBLANK_LINE: i16 = 260;
 const RESET_OAM_ADDRESS_LINE: i16 = SCREEN_HEIGHT as i16 + 1;
 
 impl Ppu {
@@ -285,20 +283,17 @@ impl Ppu {
 
     #[inline(never)]
     fn process_cycle(&mut self) {
-
-        if self.current_cycle == 1 {
-            if self.current_line == RAISE_VBLANK_LINE {
-                self.status.insert(Status::VBLANK); // on vblank flag
-            }
-            if self.current_line == DROP_VBLANK_LINE {
-                self.status.remove(Status::VBLANK); // clear vblank flag
-                self.done_rendered = true;
-            }
+        if self.current_cycle == 0 {
             if self.current_line == RAISE_NMI_LINE {
-                self.is_raise_nmi = true;
+                self.status.insert(Status::VBLANK); // on vblank flag
+                if self.control.is_enable_nmi() {
+                    self.is_raise_nmi = true;
+                }
             }
             if self.current_line == DROP_NMI_LINE {
+                self.status.remove(Status::VBLANK); // clear vblank flag
                 self.is_raise_nmi = false;
+                self.done_rendered = true;
             }
         }
 
@@ -312,10 +307,10 @@ impl Ppu {
             self.process_pixel();
         }
 
-        // reset OAM address
-        if RESET_OAM_ADDRESS_LINE <= self.current_line && self.current_line <= SCANLINE_PER_SCREEN {
-            self.oam_address = 0;
-        }
+        // // reset OAM address
+        // if RESET_OAM_ADDRESS_LINE <= self.current_line && self.current_line <= SCANLINE_PER_SCREEN {
+        //     self.oam_address = 0;
+        // }
 
         self.update_cycle();
     }
@@ -407,7 +402,7 @@ impl Ppu {
     fn process_pixel(&mut self) {
         let (x,y) = self.current_point();
 
-        info!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
+        debug!("process_pixel {},{}, ctrl:{:x}", x, y, self.control);
 
         let mut palette_index = self.fetched_background.get_palette_index(x & 0x07, y & 0x07, &mut self.vram);
 
@@ -420,9 +415,11 @@ impl Ppu {
             }
         }
 
-        info!("palette_index {}", palette_index);
+        debug!("palette_index {}", palette_index);
         if palette_index != 0 {
-            self.put_pixel(palette_index, x, y);
+            let pixel_x = self.current_cycle as u16;
+            let pixel_y = self.current_line as u16;
+            self.put_pixel(palette_index, pixel_x, pixel_y);
         }
     }
 
@@ -433,10 +430,13 @@ impl Ppu {
 
 
     pub fn read(&mut self, addr: u16) -> u8 {
+        info!("read {:x}", addr);
         match addr {
             0x2002 => {
                 // PPU_STATUS
-                self.status.bits()
+                let result = self.status.bits();
+                self.status.remove(Status::VBLANK); // clear vblank
+                result
             }
             0x2004 => {
                 // OAM_DATA
@@ -455,6 +455,7 @@ impl Ppu {
     }
 
     pub fn write(&mut self, addr: u16, data: u8) {
+        info!("write {:x} = {:x}", addr, data);
         match addr {
             0x2000 => {
                 // PPU_CTRL
@@ -686,11 +687,7 @@ impl OamDmaTask {
         for i in 0..0x0100u16 {
             let s = (self.source + i) as u16;
             let v = mbc.read(s);
-            ppu.oam_ram[i as usize] = v;
-            info!(
-                "oam_ram[0x{:04x}] = mapper.read(0x{:04x}) = {:02x}",
-                i, s, v
-            );
+            ppu.write(0x2004, v);
         }
     }
 }
