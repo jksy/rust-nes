@@ -286,9 +286,8 @@ impl Ppu {
         if self.current_cycle == 0 {
             if self.current_line == RAISE_NMI_LINE {
                 self.status.insert(Status::VBLANK); // on vblank flag
-                if self.control.is_enable_nmi() {
-                    self.is_raise_nmi = true;
-                }
+                self.status.remove(Status::SPRITE_ZERO_HIT); // clear sprite zero
+                self.is_raise_nmi = true;
             }
             if self.current_line == DROP_NMI_LINE {
                 self.status.remove(Status::VBLANK); // clear vblank flag
@@ -390,6 +389,10 @@ impl Ppu {
                 continue;
             }
 
+            if sprite_index == 0 {
+                self.status.insert(Status::SPRITE_ZERO_HIT);
+            }
+
             self.fetched_sprites.push(sprite);
 
             if self.fetched_sprites.len() == 8 {
@@ -436,6 +439,7 @@ impl Ppu {
                 // PPU_STATUS
                 let result = self.status.bits();
                 self.status.remove(Status::VBLANK); // clear vblank
+                self.status.remove(Status::SPRITE_ZERO_HIT); // clear zero hito
                 result
             }
             0x2004 => {
