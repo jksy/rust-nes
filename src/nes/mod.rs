@@ -4,6 +4,7 @@ mod cpu;
 mod mapper;
 mod mbc;
 mod ppu;
+mod apu;
 pub mod joypad;
 pub mod rom;
 
@@ -13,6 +14,7 @@ use nes::cpu::Cpu;
 use nes::mbc::Mbc;
 use nes::joypad::Joypad;
 use nes::ppu::Ppu;
+use nes::apu::Apu;
 use nes::mapper::Mapper;
 use nes::bmp::Image;
 
@@ -20,6 +22,7 @@ pub struct Nes {
     cpu: Cpu,
     mbc: Rc<RefCell<Box<Mbc>>>,
     ppu: Rc<RefCell<Box<Ppu>>>,
+    apu: Rc<RefCell<Box<Apu>>>,
     joypad: Rc<RefCell<Box<Joypad>>>,
     // tick: u32,
 }
@@ -34,8 +37,9 @@ impl Nes {
     pub fn new() -> Self {
         let mapper = wrap_rc!(Mapper::new());
         let ppu = wrap_rc!(Ppu::new(mapper.clone()));
+        let apu = wrap_rc!(Apu::new());
         let joypad = wrap_rc!(Joypad::new());
-        let mbc = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), joypad.clone()));
+        let mbc = wrap_rc!(Mbc::new(mapper.clone(), ppu.clone(), apu.clone(), joypad.clone()));
 
         ppu.borrow_mut().set_mbc(Rc::downgrade(&mbc));
         let cpu = Cpu::new(mbc.clone());
@@ -44,6 +48,7 @@ impl Nes {
             cpu: cpu,
             mbc: mbc,
             ppu: ppu,
+            apu: apu,
             joypad: joypad,
         }
     }
