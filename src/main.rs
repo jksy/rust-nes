@@ -16,9 +16,9 @@ use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::PixelFormatEnum;
 use sdl2::rect::Rect;
-use sdl2::render::Canvas;
-use sdl2::render::Texture;
+use sdl2::render::{Canvas, Texture};
 use sdl2::video::Window;
+use sdl2::audio::{self, AudioSpecDesired, AudioCallback, AudioDevice};
 use std::collections::HashSet;
 use std::env;
 use std::io::{self, Write};
@@ -26,6 +26,8 @@ use std::process::exit;
 use std::rc::Rc;
 use std::time::SystemTime;
 use std::{thread, time};
+use std::sync::{Arc, Mutex};
+use std::f32;
 
 fn get_rom_filename() -> Result<(String), (String)> {
     if env::args().count() != 2 {
@@ -33,6 +35,62 @@ fn get_rom_filename() -> Result<(String), (String)> {
     }
     Ok(env::args().nth(1).unwrap())
 }
+
+struct SineWave {
+    position: u32,
+    hz: f32,
+}
+
+impl AudioCallback for SineWave {
+    type Channel = u8;
+    fn callback(&mut self, data: &mut [u8]) {
+        // 22050 /;
+        // self.hz = 440.0;
+        let sample_freq = 22050 as f32;
+        let byte_per_period = sample_freq / self.hz;
+        // let sample_freq = 11025 / 2;
+
+        for dst in data.iter_mut() {
+            let current = (self.position as f32 * 6.28 / byte_per_period).sin();
+            *dst = (current * 128.0 + 128.0) as u8;
+            info!("dst = {:x}", *dst);
+            self.position += 1;
+            self.position %= byte_per_period as u32;
+        }
+    }
+}
+
+struct SoundBuffer {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl SoundBuffer {
+    fn new() -> Self {
+        SoundBuffer {
+            buffer: Arc::new(Mutex::new(vec![0u8; 10240])),
+        }
+    }
+}
+
+impl AudioCallback for SoundBuffer {
+    type Channel = u8;
+    fn callback(&mut self, data: &mut [u8]) {
+        // // 22050 /;
+        // // self.hz = 440.0;
+        // let sample_freq = 22050 as f32;
+        // let byte_per_period = sample_freq / self.hz;
+        // // let sample_freq = 11025 / 2;
+
+        // for dst in data.iter_mut() {
+        //     let current = (self.position as f32 * 6.28 / byte_per_period).sin();
+        //     *dst = (current * 128.0 + 128.0) as u8;
+        //     info!("dst = {:x}", *dst);
+        //     self.position += 1;
+        //     self.position %= byte_per_period as u32;
+        // }
+    }
+}
+
 
 fn run_nes() -> Result<(), (String)> {
     env_logger::init();
@@ -43,6 +101,7 @@ fn run_nes() -> Result<(), (String)> {
     let rom_filename = get_rom_filename().unwrap();
 
     let mut nes = Nes::new();
+    let mut sound = SoundBuffer::new();
 
     let sdl_context = sdl2::init().unwrap();
 
@@ -86,6 +145,18 @@ fn run_nes() -> Result<(), (String)> {
     let mut button_state = 0u8;
     let mut button_state_changed = false;
     let mut img = vec![0u8; (screen_width * screen_height * 4) as usize]; // RGBA
+
+    // === audio ===
+    let audio_system = sdl_context.audio().unwrap();
+    let audio_spec = AudioSpecDesired {freq: Some(22050), channels: Some(1), samples: None};
+    let sine_wave = SineWave{position: 0, hz: 880.0};
+
+    let audio_device = audio_system.open_playback(None, &audio_spec, move |spec| {
+        info!("spec = {:?}", spec);
+        // panic!("XX");
+        sine_wave
+    }).unwrap();
+    audio_device.resume();
 
     'running: loop {
         let elapsed = prev_poll_event_time.elapsed().unwrap();
