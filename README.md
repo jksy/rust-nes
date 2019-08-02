@@ -1,4 +1,4 @@
-# NES emulator created by rust
+# NES emulator written by rust
 
 ## Purpose
 To learn Rust language.
