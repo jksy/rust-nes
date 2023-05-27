@@ -8,6 +8,7 @@ use std::mem;
 use std::slice;
 
 #[derive(Clone)]
+#[repr(packed)]
 struct RomHeader {
     magic_number: [u8; 4],
     prg_page_count: u8,
