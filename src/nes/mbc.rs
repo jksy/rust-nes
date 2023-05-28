@@ -1,5 +1,6 @@
 use nes::rom::Rom;
 use nes::ppu::Ppu;
+use nes::apu::Apu;
 use nes::mapper::Mapper;
 use nes::joypad::Joypad;
 use std::cell::RefCell;
@@ -12,6 +13,7 @@ pub struct Mbc {
     // vrom: &u8,
     ram: Box<[u8]>,
     ppu: Rc<RefCell<Box<Ppu>>>,
+    apu: Rc<RefCell<Box<Apu>>>,
     joypad: Rc<RefCell<Box<Joypad>>>,
     // sram: &u8,
     // vram: &u8,
@@ -21,11 +23,13 @@ impl Mbc {
     pub fn new(
         mapper: Rc<RefCell<Box<Mapper>>>,
         ppu: Rc<RefCell<Box<Ppu>>>,
+        apu: Rc<RefCell<Box<Apu>>>,
         joypad: Rc<RefCell<Box<Joypad>>>,
     ) -> Self {
         Mbc {
             mapper: mapper,
             ppu: ppu,
+            apu: apu,
             joypad: joypad,
             ram: Box::new([0u8; 0x2000]),
         }
@@ -70,7 +74,7 @@ impl Mbc {
             0x0000u16...0x1FFFu16 => self.ram[addr as usize] = value,
             0x2000u16...0x3FFFu16 => self.ppu.borrow_mut().write(addr & 0x2007, value),
             // 0x2000u16...0x3FFFu16 => self.io[], // dont use
-            0x4000u16...0x4013u16 => {} // ignore(APU, etc)
+            0x4000u16...0x4013u16 => {self.apu.borrow_mut().write(addr & 0x40FFu16, value)},
             0x4014u16 => self.ppu.borrow_mut().write(addr, value),
             0x4015u16 => {
                 // ignore
